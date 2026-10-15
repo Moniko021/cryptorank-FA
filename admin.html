@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>پنل مدیریت ابری | کریپتورنک پرو</title>
+  <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+  <link rel="stylesheet" href="style.css?v=109">
+  <style>
+    .admin-container { max-width: 600px; margin: 30px auto; padding: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 24px; }
+    .admin-title { font-size: 20px; font-weight: 900; color: #60a5fa; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+  </style>
+  <!-- کتابخانه‌های فایربیس گوگل برای دیتابیس ابری -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+
+  <div class="admin-container">
+    <div class="admin-title">
+      <span>👑 پنل مدیریت ابری</span>
+      <a href="index.html" style="font-size:12px; color:var(--muted); text-decoration:none; background:rgba(255,255,255,0.05); padding:6px 12px; border-radius:8px;">← بازگشت به سایت</a>
+    </div>
+
+    <div id="login-box">
+      <div style="font-size:13px; color:var(--muted); margin-bottom:12px;">لطفاً برای ورود به پنل مدیریت ابری رمز عبور را وارد کنید:</div>
+      <input id="admin-pass" class="inp" type="password" placeholder="رمز عبور (پیش‌فرض: 1234)">
+      <button onclick="checkAdminLogin()" class="spin-btn" style="width:100%;">ورود به مدیریت</button>
+    </div>
+
+    <div id="panel-box" style="display:none;">
+      <div style="background:#0b0e14; padding:16px; border-radius:18px; margin-bottom:20px;">
+        <h3 style="font-size:15px; font-weight:900; margin-bottom:12px; color:#10b981;">+ افزودن ایردراپ جدید (زنده روی ابر)</h3>
+        <input id="n-name" class="inp" placeholder="نام پروژه (مثلا Blum)">
+        <input id="n-task" class="inp" placeholder="توضیح تسک‌ها و مراحل">
+        <input id="n-vc" class="inp" placeholder="سرمایه‌گذاران (مثلا Paradigm)">
+        <input id="n-raised" class="inp" placeholder="مبلغ سرمایه (مثلا $50M)">
+        <input id="n-link" class="inp" placeholder="لینک رفرال شما (https://...)">
+        <button onclick="saveNewDropCloud()" class="spin-btn" style="width:100%;">ذخیره ابری و انتشار آنی</button>
+      </div>
+
+      <div style="font-size:14px; font-weight:900; margin-bottom:10px;">ایردراپ‌های روی ابر:</div>
+      <div id="admin-drops-list"><div style="color:var(--muted); font-size:12px;">در حال بارگذاری اطلاعات ابری...</div></div>
+    </div>
+  </div>
+
+  <script>
+    function checkAdminLogin() {
+      const pass = document.getElementById('admin-pass').value;
+      if (pass === '1234') {
+        document.getElementById('login-box').style.display = 'none';
+        document.getElementById('panel-box').style.display = 'block';
+        loadCloudDropsAdmin();
+      } else {
+        alert('رمز عبور اشتباه است!');
+      }
+    }
+
+    function loadCloudDropsAdmin() {
+      db.collection("drops").get().then((querySnapshot) => {
+        const container = document.getElementById('admin-drops-list');
+        if (querySnapshot.empty) {
+          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ ایردراپی روی ابر ثبت نشده است.</div>';
+          return;
+        }
+        let html = '';
+        querySnapshot.forEach((doc) => {
+          let d = doc.data();
+          html += `
+            <div style="background:#0b0e14; padding:12px; border-radius:14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-weight:900; font-size:14px;">🪂 ${d.name}</div>
+                <div style="font-size:11px; color:var(--muted);">${d.task}</div>
+              </div>
+              <button onclick="deleteCloudDrop('${doc.id}')" style="background:#f43f5e; color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">حذف</button>
+            </div>`;
+        });
+        container.innerHTML = html;
+      });
+    }
+
+    function saveNewDropCloud() {
+      const name = document.getElementById('n-name').value;
+      const task = document.getElementById('n-task').value;
+      if (!name) return alert('لطفاً نام پروژه را وارد کنید.');
+
+      db.collection("drops").add({
+        id: Date.now(),
+        name: name,
+        task: task || 'تسک‌های روزانه',
+        vc: document.getElementById('n-vc').value || 'نامشخص',
+        raised: document.getElementById('n-raised').value || 'نامشخص',
+        link: document.getElementById('n-link').value || 'https://t.me/',
+        cost: "رایگان", reward: "ایردراپ", chain: "Testnet",
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => {
+        alert('ایردراپ با موفقیت روی ابر ذخیره شد و در سراسر سایت آپدیت شد!');
+        document.getElementById('n-name').value = '';
+        document.getElementById('n-task').value = '';
+        document.getElementById('n-vc').value = '';
+        document.getElementById('n-raised').value = '';
+        document.getElementById('n-link').value = '';
+        loadCloudDropsAdmin();
+      }).catch(error => {
+        alert('خطا در ذخیره ابری: ' + error.message);
+      });
+    }
+
+    function deleteCloudDrop(docId) {
+      if (!confirm('آیا این ایردراپ از روی ابر حذف شود؟')) return;
+      db.collection("drops").doc(docId).delete().then(() => {
+        loadCloudDropsAdmin();
+      });
+    }
+  </script>
+</body>
+</html>

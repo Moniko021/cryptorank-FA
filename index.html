@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>کریپتورنک پرو</title>
+  <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+  <link rel="stylesheet" href="style.css?v=110">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+
+  <!-- پنجره ورود اولیه -->
+  <div id="auth-modal" class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-logo">crypto<span>rank</span></div>
+      <div class="auth-sub">به پلتفرم تحلیل کریپتو و شکار ایردراپ خوش آمدید. لطفاً نحوه ورود خود را انتخاب کنید:</div>
+      
+      <div id="auth-main-btns">
+        <button id="saved-google-btn" class="btn-google" style="display:none; background:#eff6ff; border:2px solid #3b82f6;" onclick="quickGoogleLogin()">
+          <span>🔄</span> <span id="saved-google-txt">ادامه با اکانت ذخیره شده</span>
+        </button>
+
+        <button class="btn-google" onclick="showGoogleForm()">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          <span>ورود با حساب گوگل</span>
+        </button>
+
+        <button class="btn-anon" onclick="loginAnonymously()">
+          <span>🕶️</span>
+          <span>ورود به صورت ناشناس (مهمان)</span>
+        </button>
+      </div>
+
+      <div id="google-form" class="google-form-box">
+        <div style="font-size:13px; font-weight:800; margin-bottom:10px; color:#60a5fa;">اتصال حساب گوگل (ذخیره برای ورودهای بعدی)</div>
+        <input id="g-name" class="inp" type="text" placeholder="نام و نام خانوادگی شما (مثلاً کوروش)">
+        <input id="g-email" class="inp" type="email" placeholder="آدرس جیمیل (example@gmail.com)" style="direction:ltr; text-align:left;">
+        <button onclick="submitGoogleLogin()" class="spin-btn" style="width:100%; margin-bottom:8px;">✅ ثبت و ورود دائمی</button>
+        <button onclick="hideGoogleForm()" style="width:100%; background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:6px;">بازگشت</button>
+      </div>
+    </div>
+  </div>
+
+  <header>
+    <div class="top-nav">
+      <div class="logo">crypto<span>rank</span></div>
+      <div class="top-icons">
+        <div class="user-chip" onclick="openProfileModal()" id="header-user-chip">
+          <div class="user-avatar" id="header-user-avatar">🕶️</div>
+          <span class="user-name-txt" id="header-user-name">ناشناس</span>
+        </div>
+        <button class="icon-btn" onclick="manualRefresh()" title="به‌روزرسانی قیمت‌ها">🔄</button>
+        <!-- دکمه ورود به پنل مدیریت اختصاصی -->
+        <a href="admin.html" class="icon-btn" title="پنل مدیریت" style="text-decoration:none;">⚙️</a>
+      </div>
+    </div>
+
+    <!-- منوی استوری بالای صفحه -->
+    <div class="stories-bar">
+      <button onclick="openPage('home')" id="st-home" class="story-item active">
+        <div class="story-ring"><div class="story-inner">🏠</div></div>
+        <span class="story-title">صفحه اصلی</span>
+      </button>
+      <button onclick="openPage('news')" id="st-news" class="story-item">
+        <div class="story-ring"><div class="story-inner">📰</div></div>
+        <span class="story-title">اخبار آنی</span>
+      </button>
+      <button onclick="openPage('drops')" id="st-drops" class="story-item">
+        <div class="story-ring"><div class="story-inner">🪂</div></div>
+        <span class="story-title">شکار ایردراپ</span>
+      </button>
+      <button onclick="openPage('funding')" id="st-funding" class="story-item">
+        <div class="story-ring"><div class="story-inner">🚀</div></div>
+        <span class="story-title">جذب سرمایه</span>
+      </button>
+      <button onclick="openPage('vcs')" id="st-vcs" class="story-item">
+        <div class="story-ring"><div class="story-inner">🏛️</div></div>
+        <span class="story-title">سرمایه‌گذاران</span>
+      </button>
+      <button onclick="openPage('unlocks')" id="st-unlocks" class="story-item">
+        <div class="story-ring"><div class="story-inner">🔓</div></div>
+        <span class="story-title">آنلاک توکن</span>
+      </button>
+      <button onclick="openPage('converter')" id="st-converter" class="story-item">
+        <div class="story-ring"><div class="story-inner">💱</div></div>
+        <span class="story-title">مبدل ارز</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- PAGE 1: HOME -->
+  <div id="page-home" class="view-page active">
+    
+    <div class="sec-wrap">
+      <div class="sec-head"><div class="sec-title">بخش‌های ویژه</div></div>
+      <div class="featured-scroll">
+        <div class="feat-card feat-green" onclick="openGainersLosersModal('gainers')">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="feat-icon">🚀</div>
+            <span style="font-size:10px; background:rgba(0,0,0,0.25); padding:3px 7px; border-radius:6px; font-weight:bold;">آنلاین</span>
+          </div>
+          <div>
+            <div class="feat-h">بیشترین رشد</div>
+            <div class="feat-p">ارزهایی که امروز بیشترین پامپ را داشتند</div>
+            <div class="live-badge" id="top-gainer-preview">در حال دریافت...</div>
+          </div>
+        </div>
+
+        <div class="feat-card feat-red" onclick="openGainersLosersModal('losers')">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="feat-icon">🩸</div>
+            <span style="font-size:10px; background:rgba(0,0,0,0.25); padding:3px 7px; border-radius:6px; font-weight:bold;">آنلاین</span>
+          </div>
+          <div>
+            <div class="feat-h">بیشترین ریزش</div>
+            <div class="feat-p">ارزهایی که امروز بیشترین اصلاح را داشتند</div>
+            <div class="live-badge" id="top-loser-preview">در حال دریافت...</div>
+          </div>
+        </div>
+
+        <div class="feat-card feat-blue" onclick="openPage('funding')">
+          <div class="feat-icon">💼</div>
+          <div>
+            <div class="feat-h">جذب سرمایه‌ها</div>
+            <div class="feat-p">جدیدترین سرمایه‌گذاری‌های VC در کریپتو</div>
+          </div>
+        </div>
+
+        <div class="feat-card feat-dark" onclick="openPage('drops')">
+          <div class="feat-icon">🪂</div>
+          <div>
+            <div class="feat-h">شکار ایردراپ</div>
+            <div class="feat-p">ایردراپ‌های معتبر و تسک‌های رایگان</div>
+          </div>
+        </div>
+
+        <div class="feat-card feat-purple" onclick="openPage('vcs')">
+          <div class="feat-icon">🏛️</div>
+          <div>
+            <div class="feat-h">صندوق‌های VC</div>
+            <div class="feat-p">بررسی غول‌های سرمایه‌گذاری و پورتفولیو</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-wrap">
+      <div class="sec-head">
+        <div class="sec-title">اخبار فوری کریپتو</div>
+        <button class="view-all-btn" onclick="openPage('news')">مشاهده همه 〈</button>
+      </div>
+      <div id="home-news-preview"></div>
+    </div>
+
+    <div class="sec-wrap">
+      <div class="sec-head"><div class="sec-title">شاخص‌های لحظه‌ای بازار</div></div>
+      <div class="widgets-row">
+        <div class="w-card">
+          <div class="w-top"><span>شاخص ترس و طمع</span></div>
+          <div class="gauge-box">
+            <div class="gauge-arc"></div>
+            <div class="gauge-num">62</div>
+            <div class="gauge-lbl">طمع (صعودی)</div>
+          </div>
+        </div>
+        <div class="w-card">
+          <div class="w-top"><span>دامیننس بیت‌کوین</span><span style="color:#3b82f6">۷ روزه</span></div>
+          <div>
+            <div class="dom-val" id="btc-dom">57.89%</div>
+            <div class="dom-chg">+1.17% ↗</div>
+          </div>
+          <svg class="mini-chart" viewBox="0 0 100 35">
+            <path d="M0,30 L15,25 L30,28 L45,18 L60,22 L75,10 L90,14 L100,5" fill="none" stroke="#10b981" stroke-width="2.5"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-wrap">
+      <div class="sec-head">
+        <div class="sec-title">برترین ارزهای بازار</div>
+        <button class="view-all-btn" onclick="toggleAllCoins()" id="view-all-txt">مشاهده همه (50) 〈</button>
+      </div>
+      
+      <div class="top-coins-scroll" id="top-coins-cards">
+        <div style="color:var(--muted); font-size:12px; padding:20px;">در حال دریافت قیمت‌های زنده...</div>
+      </div>
+
+      <div id="all-coins-wrapper" class="all-coins-box" style="display:none;">
+        <input id="coin-search" class="inp" type="text" placeholder="🔍 جستجوی نام یا نماد ارز (BTC, ETH, SOL)..." oninput="renderFullList()">
+        <div id="full-coins-list"></div>
+      </div>
+    </div>
+
+    <div class="wheel-section">
+      <div style="font-size:17px; font-weight:900; color:#fff;">🎡 گردونه جایزه روزانه</div>
+      <div style="font-size:12px; color:var(--muted); margin-top:4px;">هر ۲۴ ساعت گردونه را بچرخانید و امتیاز و جایزه ویژه ببرید!</div>
+      <div style="font-size:18px; margin-bottom:-12px; position:relative; z-index:2;">🔻</div>
+      <div class="wheel-circle" id="wheel-el">
+        <div class="wheel-center">🎁</div>
+      </div>
+      <button class="spin-btn" onclick="spinWheel()">🎯 چرخاندن گردونه شانس</button>
+    </div>
+  </div>
+
+  <div id="page-news" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">📰 آخرین اخبار و تحلیل‌های آنی کریپتو</div></div><div id="news-list-container"></div></div>
+  <div id="page-drops" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🪂 شکار ایردراپ‌ها (آنلاین)</div></div><div id="drops-list"></div></div>
+  <div id="page-vcs" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🏛️ سرمایه‌گذاران برتر کریپتو</div></div><div id="vcs-list"></div></div>
+  <div id="page-funding" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🚀 جذب سرمایه‌های اخیر</div></div><div id="funding-list"></div></div>
+  <div id="page-unlocks" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🔓 تقویم آزادسازی توکن‌ها</div></div><div id="unlocks-list"></div></div>
+  <div id="page-converter" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">💱 مبدل لحظه‌ای ارزها</div></div><div class="info-card"><label style="font-size:12px; color:var(--muted);">مقدار ارز:</label><input type="number" id="c-amt" class="inp" value="1" oninput="calcConv()" style="margin-top:6px;"><label style="font-size:12px; color:var(--muted);">انتخاب ارز:</label><select id="c-sel" class="inp" onchange="calcConv()" style="margin-top:6px;"></select><div style="background:#0b0e14; padding:16px; border-radius:14px; text-align:center; margin-top:8px;"><div style="font-size:11px; color:var(--muted);">معادل دلاری:</div><div id="c-res" style="font-size:24px; font-weight:900; color:#10b981; direction:ltr; margin-top:4px;">$0.00</div></div></div></div>
+
+  <div id="modal" class="modal" onclick="closeModal()"><div class="modal-box" onclick="event.stopPropagation()"><div id="modal-body"></div></div></div>
+
+  <script src="app.js?v=110"></script>
+</body>
+</html>
