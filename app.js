@@ -9,6 +9,28 @@ let savedGoogleAccount = JSON.parse(localStorage.getItem('cr_saved_google_user')
 let savedDrops = JSON.parse(localStorage.getItem('cr_user_saved_drops')) || [];
 
 function initAuth() {
+  if (typeof auth !== 'undefined') {
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        const userObj = {
+          type: 'google',
+          uid: user.uid,
+          name: user.displayName || user.email.split('@')[0],
+          email: user.email,
+          photo: user.photoURL || '',
+          points: savedGoogleAccount?.points || 100
+        };
+        currentUser = userObj;
+        savedGoogleAccount = userObj;
+        localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+        localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
+        const authModal = document.getElementById('auth-modal');
+        if (authModal) authModal.classList.remove('show');
+        updateUserHeader();
+      }
+    });
+  }
+
   if (currentUser && currentUser.type === 'google') {
     updateUserHeader();
     return;
@@ -21,8 +43,40 @@ function initAuth() {
     const savedTxt = document.getElementById('saved-google-txt');
     if (savedBtn && savedTxt) {
       savedBtn.style.display = 'flex';
-      savedTxt.innerText = `ورود خودکار با ${savedGoogleAccount.name} (${savedGoogleAccount.email})`;
+      savedTxt.innerText = `ادامه با ${savedGoogleAccount.name} (${savedGoogleAccount.email})`;
     }
+  }
+}
+
+async function realGoogleSignIn() {
+  try {
+    if (typeof firebase === 'undefined' || !firebase.auth) {
+      showGoogleForm();
+      return;
+    }
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await auth.signInWithPopup(provider);
+    const user = result.user;
+    if (user) {
+      const userObj = {
+        type: 'google',
+        uid: user.uid,
+        name: user.displayName || user.email.split('@')[0],
+        email: user.email,
+        photo: user.photoURL || '',
+        points: savedGoogleAccount?.points || 100
+      };
+      currentUser = userObj;
+      savedGoogleAccount = userObj;
+      localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+      localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
+      document.getElementById('auth-modal').classList.remove('show');
+      updateUserHeader();
+    }
+  } catch (err) {
+    console.warn("Firebase Auth notice:", err);
+    showGoogleForm();
   }
 }
 
@@ -58,7 +112,6 @@ function submitGoogleLogin() {
   savedGoogleAccount = userObj;
   localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
   localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
-  
   document.getElementById('auth-modal').classList.remove('show');
   updateUserHeader();
 }
@@ -89,7 +142,11 @@ function updateUserHeader() {
   if (!currentUser || !avatarEl || !nameEl) return;
 
   if (currentUser.type === 'google') {
-    avatarEl.innerText = currentUser.name.charAt(0).toUpperCase();
+    if (currentUser.photo) {
+      avatarEl.innerHTML = `<img src="${currentUser.photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+    } else {
+      avatarEl.innerText = currentUser.name.charAt(0).toUpperCase();
+    }
     avatarEl.style.background = '#10b981';
     nameEl.innerText = currentUser.name;
   } else {
@@ -108,14 +165,14 @@ function openProfileModal() {
   const savedCount = savedDrops.length;
   document.getElementById('modal-body').innerHTML = `
     <div style="text-align:center;margin-bottom:16px;">
-      <div style="width:60px;height:60px;border-radius:50%;background:${isG?'#10b981':'#3b82f6'};color:#fff;font-size:26px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;">
-        ${isG ? currentUser.name.charAt(0).toUpperCase() : '🕶️'}
+      <div style="width:60px;height:60px;border-radius:50%;background:${isG?'#10b981':'#3b82f6'};color:#fff;font-size:26px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;overflow:hidden;">
+        ${isG && currentUser.photo ? `<img src="${currentUser.photo}" style="width:100%;height:100%;object-fit:cover;">` : (isG ? currentUser.name.charAt(0).toUpperCase() : '🕶️')}
       </div>
       <div style="font-size:18px;font-weight:900;">${currentUser.name}</div>
       <div style="font-size:12px;color:var(--muted);direction:ltr;">${currentUser.email}</div>
     </div>
     <div style="background:#0b0e14;padding:14px;border-radius:16px;margin-bottom:16px;font-size:12px;line-height:2;">
-      <div>🔐 <b>نوع حساب:</b> <span style="color:${isG?'#10b981':'#eab308'}">${isG ? 'حساب گوگل (ذخیره دائمی)' : 'ورود ناشناس'}</span></div>
+      <div>🔐 <b>نوع حساب:</b> <span style="color:${isG?'#10b981':'#eab308'}">${isG ? 'حساب رسمی گوگل' : 'ورود ناشناس'}</span></div>
       <div>🎁 <b>امتیاز پلتفرم:</b> <b style="color:#60a5fa">${currentUser.points || 0} امتیاز</b></div>
       <div>⭐ <b>ایردراپ‌های ذخیره‌شده:</b> <b style="color:#eab308">${savedCount} مورد</b></div>
     </div>
@@ -128,6 +185,9 @@ function openProfileModal() {
 
 function switchAccount() {
   closeModal();
+  if (typeof auth !== 'undefined' && auth.currentUser) {
+    auth.signOut();
+  }
   localStorage.removeItem('cr_active_user');
   currentUser = null;
   hideGoogleForm();
@@ -150,9 +210,10 @@ let unlocks = [
 ];
 
 let newsList = [
-  { id: 1, title: "تایید صندوق قابل معامله (ETF) سولانا توسط کمیسیون بورس آمریکا", time: "۱۰ دقیقه پیش", source: "CoinDesk", desc: "تحلیلگران پیش‌بینی می‌کنند با تایید این صندوق، ورود سرمایه عظیمی به اکوسیستم سولانا سرازیر شود." },
-  { id: 2, title: "رشد ۳۰ درصدی کارمزد شبکه اتریوم همزمان با افزایش حجم معاملات دیفای", time: "۴۵ دقیقه پیش", source: "CoinTelegraph", desc: "فعالیت در لایه اول اتریوم به شدت افزایش یافته و توکن‌سوزی به بالاترین میزان ماهانه رسیده است." }
+  { id: 1, title: "تایید صندوق قابل معامله (ETF) سولانا و افزایش ورود سرمایه نهادی", time: "زنده", source: "CoinDesk", desc: "تحلیلگران پیش‌بینی می‌کنند با تایید صندوق‌های جدید، ورود سرمایه عظیمی به اکوسیستم آلترناتیوها سرازیر شود." },
+  { id: 2, title: "رشد ۳۰ درصدی حجم معاملات دیفای همزمان با کاهش کارمزد لایه‌های دوم", time: "زنده", source: "CoinTelegraph", desc: "فعالیت در شبکه‌های لایه اول و دوم به شدت افزایش یافته و حجم قفل‌شده (TVL) به سقف ماهانه رسیده است." }
 ];
+
 function openPage(p) {
   currentPage = p;
   ['home','news','drops','vcs','funding','unlocks','converter'].forEach(x => {
@@ -167,22 +228,81 @@ function openPage(p) {
   window.scrollTo(0, 0);
 }
 
+async function fetchFearAndGreed() {
+  try {
+    const res = await fetch('https://api.alternative.me/fng/?limit=1');
+    const data = await res.json();
+    if (data && data.data && data.data[0]) {
+      const val = parseInt(data.data[0].value);
+      const numEl = document.querySelector('.gauge-num');
+      const lblEl = document.querySelector('.gauge-lbl');
+      if (numEl) numEl.innerText = val;
+      if (lblEl) {
+        if (val >= 55) { lblEl.innerText = 'طمع (صعودی)'; lblEl.style.color = '#10b981'; }
+        else if (val <= 45) { lblEl.innerText = 'ترس (اصلاحی)'; lblEl.style.color = '#f43f5e'; }
+        else { lblEl.innerText = 'خنثی (متعادل)'; lblEl.style.color = '#eab308'; }
+      }
+    }
+  } catch (e) {}
+}
+
 async function fetchMarket() {
+  fetchFearAndGreed();
+  renderNews();
+  fetchCloudDrops();
+
+  const cached = localStorage.getItem('cr_cached_coins');
+  if (cached && !coins.length) {
+    try {
+      coins = JSON.parse(cached);
+      renderTopCards();
+      renderFullList();
+      updateGainersLosersPreview();
+      populateConverter();
+    } catch(e) {}
+  }
+
   try {
     const res = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false');
-    coins = await res.json();
+    if (!res.ok) throw new Error('CoinGecko limit');
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      coins = data;
+      localStorage.setItem('cr_cached_coins', JSON.stringify(coins));
+    }
+  } catch (err1) {
+    try {
+      const res2 = await fetch('https://api.coincap.io/v2/assets?limit=50');
+      const data2 = await res2.json();
+      if (data2 && Array.isArray(data2.data)) {
+        coins = data2.data.map((c, idx) => ({
+          id: c.id,
+          symbol: c.symbol.toLowerCase(),
+          name: c.name,
+          image: `https://assets.coincap.io/assets/icons/${c.symbol.toLowerCase()}@2x.png`,
+          current_price: parseFloat(c.priceUsd) || 0,
+          price_change_percentage_24h: parseFloat(c.changePercent24Hr) || 0,
+          market_cap_rank: parseInt(c.rank) || (idx + 1),
+          high_24h: (parseFloat(c.priceUsd) || 0) * 1.03,
+          low_24h: (parseFloat(c.priceUsd) || 0) * 0.97
+        }));
+        localStorage.setItem('cr_cached_coins', JSON.stringify(coins));
+      }
+    } catch (err2) {}
+  }
+
+  if (coins.length > 0) {
     renderTopCards();
     renderFullList();
     updateGainersLosersPreview();
-    renderNews();
-    fetchCloudDrops();
     populateConverter();
-  } catch (e) {
-    document.getElementById('top-coins-cards').innerHTML = '<div style="color:#f43f5e;font-size:12px;padding:10px;">خطا در دریافت قیمت‌ها.</div>';
+  } else {
+    document.getElementById('top-coins-cards').innerHTML = '<div style="color:#f43f5e;font-size:12px;padding:10px;">خطا در دریافت قیمت. دکمه 🔄 را بزنید.</div>';
   }
 }
 
 function fetchCloudDrops() {
+  if (typeof db === 'undefined') return;
   db.collection("drops").onSnapshot((querySnapshot) => {
     cloudDrops = [];
     querySnapshot.forEach((doc) => {
@@ -193,7 +313,7 @@ function fetchCloudDrops() {
 }
 
 function manualRefresh() {
-  document.getElementById('top-coins-cards').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px;">⏳ در حال آپدیت قیمت‌ها...</div>';
+  document.getElementById('top-coins-cards').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px;">⏳ در حال آپدیت قیمت‌های زنده...</div>';
   fetchMarket();
 }
 
@@ -280,7 +400,7 @@ function openGainersLosersModal(type) {
           </div>
         </div>
         <div style="text-align:right;direction:ltr;">
-          <div style="font-weight:800;font-size:13px;">$${c.current_price.toLocaleString()}</div>
+          <div style="font-weight:800;font-size:13px;">$${c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4})}</div>
           <div style="font-size:12px;font-weight:bold;color:${color};">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</div>
         </div>
       </div>`;
@@ -315,7 +435,7 @@ function renderTopCards() {
           <path d="${path}" fill="none" stroke="${color}" stroke-width="2.5"/>
         </svg>
         <div class="tc-foot">
-          <div class="tc-price">$${c.current_price.toLocaleString()}</div>
+          <div class="tc-price">$${c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4})}</div>
           <div class="tc-chg" style="color:${color}">${isPos?'+':''}${chg.toFixed(2)}%</div>
         </div>
       </div>`;
@@ -351,7 +471,7 @@ function renderFullList() {
           </div>
         </div>
         <div style="text-align:right;direction:ltr;">
-          <div style="font-weight:800;font-size:13px;">$${c.current_price.toLocaleString()}</div>
+          <div style="font-weight:800;font-size:13px;">$${c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4})}</div>
           <div style="font-size:11px;color:${chg>=0?'#10b981':'#f43f5e'};">${chg>=0?'+':''}${chg.toFixed(2)}%</div>
         </div>
       </div>`;
@@ -371,26 +491,36 @@ function showCoinDetail(id) {
     </div>
     <div style="background:#0b0e14;padding:14px;border-radius:16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
       <span style="color:var(--muted);font-size:12px;">قیمت فعلی:</span>
-      <span style="font-size:20px;font-weight:900;direction:ltr;">$${c.current_price.toLocaleString()}</span>
+      <span style="font-size:20px;font-weight:900;direction:ltr;">$${c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4})}</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;margin-bottom:16px;">
-      <div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">سقف ۲۴ساعته</div><b style="color:#10b981;direction:ltr;display:inline-block;">$${c.high_24h?.toLocaleString()}</b></div>
-      <div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">کف ۲۴ساعته</div><b style="color:#f43f5e;direction:ltr;display:inline-block;">$${c.low_24h?.toLocaleString()}</b></div>
+      <div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">سقف ۲۴ساعته</div><b style="color:#10b981;direction:ltr;display:inline-block;">$${c.high_24h?.toLocaleString(undefined, {maximumFractionDigits: 4})}</b></div>
+      <div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">کف ۲۴ساعته</div><b style="color:#f43f5e;direction:ltr;display:inline-block;">$${c.low_24h?.toLocaleString(undefined, {maximumFractionDigits: 4})}</b></div>
     </div>
     <button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن</button>`;
   document.getElementById('modal').classList.add('show');
 }
 
 function spinWheel() {
+  const lastSpin = localStorage.getItem('cr_last_wheel_spin');
+  const now = Date.now();
+  if (lastSpin && (now - parseInt(lastSpin)) < 86400000) {
+    const hoursLeft = Math.ceil((86400000 - (now - parseInt(lastSpin))) / 3600000);
+    alert(`⏳ شما امروز گردونه را چرخانده‌اید! لطفاً ${hoursLeft} ساعت دیگر دوباره امتحان کنید.`);
+    return;
+  }
   const prizes = ["🎁 ۵۰ امتیاز ایردراپ", "💎 اشتراک VIP روزانه", "🚀 شانس مجدد", "🔥 ۱۰۰ امتیاز ویژه", "🎯 لیست ایردراپ مخفی"];
   wheelDeg += 1080 + Math.floor(Math.random() * 360);
   document.getElementById('wheel-el').style.transform = `rotate(${wheelDeg}deg)`;
   setTimeout(() => {
     const win = prizes[Math.floor(Math.random() * prizes.length)];
-    if (currentUser && currentUser.type === 'google') {
+    localStorage.setItem('cr_last_wheel_spin', Date.now().toString());
+    if (currentUser) {
       currentUser.points = (currentUser.points || 0) + 50;
       localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-      localStorage.setItem('cr_saved_google_user', JSON.stringify(currentUser));
+      if (currentUser.type === 'google') {
+        localStorage.setItem('cr_saved_google_user', JSON.stringify(currentUser));
+      }
     }
     alert('🎉 تبریک! برنده شدی: ' + win);
   }, 3100);
@@ -400,7 +530,7 @@ function renderLists() {
   const dropsContainer = document.getElementById('drops-list');
   if (dropsContainer) {
     if (!cloudDrops.length) {
-      dropsContainer.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px;">در حال دریافت ایردراپ‌های ابری...</div>';
+      dropsContainer.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px;">هیچ ایردراپی ثبت نشده است. از پنل مدیریت (⚙️) اضافه کنید.</div>';
     } else {
       dropsContainer.innerHTML = cloudDrops.map(d => `
         <div class="info-card" onclick="openCloudDropModal('${d.name}', '${d.task}', '${d.vc}', '${d.raised}', '${d.reward || 'ایردراپ'}', '${d.chain || 'Testnet'}', '${d.link}')">
@@ -518,5 +648,6 @@ function calcConv() {
 
 function closeModal() { document.getElementById('modal').classList.remove('show'); }
 
+renderLists();
 initAuth();
 fetchMarket();
