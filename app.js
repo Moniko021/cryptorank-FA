@@ -732,16 +732,38 @@ let userUnsub = null;
 
 function getDocKey(e) { return e.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'); }
 function getSpinKey() { return (currentUser && currentUser.type === 'google' && currentUser.email) ? 'cr_spin_' + getDocKey(currentUser.email) : 'cr_spin_guest'; }
+function getVaultKey(e) { return 'cr_vault_' + getDocKey(e); }
+
+function saveToLocalVault() {
+  if (currentUser && currentUser.type === 'google' && currentUser.email) {
+    const vKey = getVaultKey(currentUser.email);
+    const data = {
+      name: currentUser.name,
+      email: currentUser.email.trim().toLowerCase(),
+      points: Number(currentUser.points) || 100,
+      savedDrops: savedDrops || [],
+      lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null
+    };
+    localStorage.setItem(vKey, JSON.stringify(data));
+    localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+    localStorage.setItem('cr_saved_google_user', JSON.stringify(currentUser));
+  }
+}
 
 syncUserToCloud = function() {
-  if (typeof db !== 'undefined' && currentUser && currentUser.email && currentUser.type === 'google') {
-    const k = getDocKey(currentUser.email);
-    db.collection("users").doc(k).set({
-      name: currentUser.name, email: currentUser.email.trim().toLowerCase(),
-      points: Number(currentUser.points) || 100, savedDrops: savedDrops || [],
-      lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
-      updatedAt: new Date().toISOString()
-    }, { merge: true }).catch(()=>{});
+  if (currentUser && currentUser.type === 'google' && currentUser.email) {
+    saveToLocalVault();
+    if (typeof db !== 'undefined') {
+      const k = getDocKey(currentUser.email);
+      db.collection("users").doc(k).set({
+        name: currentUser.name,
+        email: currentUser.email.trim().toLowerCase(),
+        points: Number(currentUser.points) || 100,
+        savedDrops: savedDrops || [],
+        lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(()=>{});
+    }
   }
 };
 
@@ -752,15 +774,20 @@ loadUserFromCloud = function(email) {
   userUnsub = db.collection("users").doc(k).onSnapshot((doc) => {
     if (doc.exists && currentUser && currentUser.type === 'google') {
       const d = doc.data();
-      if (d.points !== undefined) currentUser.points = Number(d.points);
+      const cloudPts = d.points !== undefined ? Number(d.points) : 100;
+      const localPts = Number(currentUser.points) || 100;
+      currentUser.points = Math.max(cloudPts, localPts);
       if (d.name) currentUser.name = d.name;
-      if (Array.isArray(d.savedDrops)) { savedDrops = d.savedDrops; localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops)); }
-      if (d.lastSpin) { currentUser.lastSpin = String(d.lastSpin); localStorage.setItem(getSpinKey(), String(d.lastSpin)); }
-      localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-      localStorage.setItem('cr_saved_google_user', JSON.stringify(currentUser));
+      if (Array.isArray(d.savedDrops) && d.savedDrops.length > 0) {
+        savedDrops = Array.from(new Set([...(savedDrops || []), ...d.savedDrops]));
+        localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
+      }
+      if (d.lastSpin) {
+        currentUser.lastSpin = String(d.lastSpin);
+        localStorage.setItem(getSpinKey(), String(d.lastSpin));
+      }
+      saveToLocalVault();
       updateUserHeader();
-    } else if (!doc.exists && currentUser && currentUser.type === 'google') {
-      syncUserToCloud();
     }
   });
 };
@@ -785,13 +812,9 @@ async function sendVerificationCode() {
   try {
     emailjs.init(EMAILJS_PUBLIC_KEY);
     await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_name: name,
-      name: name,
-      from_name: 'CryptoRank FA',
-      to_email: email,
-      email: email,
-      otp_code: generatedOTP,
-      code: generatedOTP,
+      to_name: name, name: name, from_name: 'CryptoRank FA',
+      to_email: email, email: email,
+      otp_code: generatedOTP, code: generatedOTP,
       title: 'کد تایید: ' + generatedOTP,
       message: 'کد تایید ورود شما به کریپتورنک: ' + generatedOTP
     });
@@ -809,30 +832,48 @@ async function verifyAndLogin() {
   const code = document.getElementById('g-otp-code').value.trim();
   if (code !== generatedOTP) return alert('❌ کد وارد شده اشتباه است!');
   generatedOTP = null;
-  const k = getDocKey(pendingUser.email);
-  let pts = 100, drops = [], lSpin = null;
+  const cleanEmail = pendingUser.email.trim().toLowerCase();
+  const k = getDocKey(cleanEmail);
+  const vKey = getVaultKey(cleanEmail);
+
+  // ۱. خواندن اطلاعات قبلی این جیمیل از گاوصندوق داخلی
+  let pts = 100, drops = [], lSpin = localStorage.getItem('cr_spin_' + k) || null;
+  const localVault = localStorage.getItem(vKey);
+  if (localVault) {
+    try {
+      const vd = JSON.parse(localVault);
+      if (vd.points !== undefined) pts = Math.max(pts, Number(vd.points));
+      if (Array.isArray(vd.savedDrops)) drops = vd.savedDrops;
+      if (vd.lastSpin) lSpin = String(vd.lastSpin);
+    } catch(e){}
+  }
+
+  // ۲. خواندن اطلاعات این جیمیل از دیتابیس ابری فایربیس و ترکیب با بالاترین مقدار
   if (typeof db !== 'undefined') {
     try {
       const doc = await db.collection("users").doc(k).get();
       if (doc.exists) {
         const d = doc.data();
-        if (d.points !== undefined) pts = Number(d.points);
-        if (Array.isArray(d.savedDrops)) drops = d.savedDrops;
-        if (d.lastSpin) lSpin = String(d.lastSpin);
+        if (d.points !== undefined) pts = Math.max(pts, Number(d.points));
+        if (Array.isArray(d.savedDrops)) drops = Array.from(new Set([...drops, ...d.savedDrops]));
+        if (d.lastSpin && (!lSpin || Number(d.lastSpin) > Number(lSpin))) lSpin = String(d.lastSpin);
       }
     } catch(e){}
   }
-  currentUser = { type: 'google', name: pendingUser.name, email: pendingUser.email, points: pts, lastSpin: lSpin };
+
+  currentUser = { type: 'google', name: pendingUser.name, email: cleanEmail, points: pts, lastSpin: lSpin };
   savedGoogleAccount = Object.assign({}, currentUser);
   savedDrops = drops;
   if (lSpin) localStorage.setItem(getSpinKey(), lSpin);
-  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-  localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
   localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
+  
+  saveToLocalVault();
+  syncUserToCloud();
+  loadUserFromCloud(cleanEmail);
+
   document.getElementById('auth-modal').classList.remove('show');
   updateUserHeader();
-  loadUserFromCloud(currentUser.email);
-  syncUserToCloud();
+  renderLists();
 }
 
 spinWheel = function() {
@@ -853,12 +894,20 @@ spinWheel = function() {
     localStorage.setItem(sk, st);
     currentUser.lastSpin = st;
     currentUser.points = (Number(currentUser.points) || 0) + 50;
-    localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-    if (currentUser.type === 'google') syncUserToCloud();
+    syncUserToCloud();
     updateUserHeader();
-    alert('🎉 تبریک ' + currentUser.name + '! برنده شدی: ' + win);
+    alert('🎉 تبریک ' + currentUser.name + '! برنده شدی: ' + win + ' (امتیاز کل: ' + currentUser.points + ')');
   }, 3100);
 };
+
+// حفظ تغییر امتیاز هنگام ذخیره ایردراپ‌ها
+const origToggleSaveDrop = typeof toggleSaveDrop === 'function' ? toggleSaveDrop : null;
+if (origToggleSaveDrop) {
+  toggleSaveDrop = function(name) {
+    origToggleSaveDrop(name);
+    syncUserToCloud();
+  };
+}
 
 fetch('https://api.rss2json.com/v1/api.json?rss_url=https://cointelegraph.com/rss').then(r=>r.json()).then(d=>{
   if (d && Array.isArray(d.items)) {
