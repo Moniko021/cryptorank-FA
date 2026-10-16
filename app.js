@@ -784,7 +784,17 @@ async function sendVerificationCode() {
   btn.innerText = '⏳ در حال ارسال کد...'; btn.disabled = true;
   try {
     emailjs.init(EMAILJS_PUBLIC_KEY);
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_name: name, to_email: email, otp_code: generatedOTP });
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_name: name,
+      name: name,
+      from_name: 'CryptoRank FA',
+      to_email: email,
+      email: email,
+      otp_code: generatedOTP,
+      code: generatedOTP,
+      title: 'کد تایید: ' + generatedOTP,
+      message: 'کد تایید ورود شما به کریپتورنک: ' + generatedOTP
+    });
     document.getElementById('otp-step-1').style.display = 'none';
     document.getElementById('otp-step-2').style.display = 'block';
     document.getElementById('otp-email-preview').innerText = email;
