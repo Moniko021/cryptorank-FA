@@ -268,7 +268,33 @@ function openPage(p) {
   window.scrollTo(0, 0);
 }
 
+let cloudNewsList = [];
+let rssNewsList = [];
+
+function combineAndRenderNews() {
+  newsList = [...cloudNewsList, ...rssNewsList, ...defaultNews];
+  renderNews();
+}
+
+async function fetchRSSNews() {
+  try {
+    const res = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https://cointelegraph.com/rss');
+    const data = await res.json();
+    if (data && Array.isArray(data.items) && data.items.length > 0) {
+      rssNewsList = data.items.slice(0, 10).map((item, idx) => ({
+        id: 'rss_' + idx,
+        title: item.title,
+        source: 'CoinTelegraph',
+        time: new Date(item.pubDate.replace(/-/g, '/')).toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'}),
+        desc: item.description ? item.description.replace(/<[^>]*>?/gm, '').substring(0, 160) + '...' : item.title
+      }));
+      combineAndRenderNews();
+    }
+  } catch (e) {}
+}
+
 async function fetchGlobalIndicators() {
+  fetchRSSNews();
   try {
     const res = await fetch('https://api.alternative.me/fng/?limit=1');
     const data = await res.json();
@@ -293,7 +319,21 @@ async function fetchGlobalIndicators() {
       const domEl = document.getElementById('btc-dom');
       if (domEl && btcDom) domEl.innerText = btcDom.toFixed(2) + '%';
     }
-  } catch (e) {}
+  } catch (e) {
+    try {
+      const resCap = await fetch('https://api.coincap.io/v2/assets?limit=20');
+      const dataCap = await resCap.json();
+      if (dataCap && Array.isArray(dataCap.data)) {
+        const btcMcap = parseFloat(dataCap.data[0].marketCapUsd) || 0;
+        const totalTop20 = dataCap.data.reduce((acc, c) => acc + (parseFloat(c.marketCapUsd) || 0), 0);
+        if (btcMcap && totalTop20) {
+          const estDom = ((btcMcap / (totalTop20 * 1.12)) * 100).toFixed(2);
+          const domEl = document.getElementById('btc-dom');
+          if (domEl) domEl.innerText = estDom + '%';
+        }
+      }
+    } catch (e2) {}
+  }
 }
 
 async function fetchMarket() {
@@ -367,8 +407,8 @@ function fetchCloudData() {
   db.collection("news").onSnapshot((snap) => {
     const cloudNews = [];
     snap.forEach((doc) => cloudNews.push({ docId: doc.id, ...doc.data() }));
-    newsList = [...cloudNews.sort((a,b) => (b.id||0) - (a.id||0)), ...defaultNews];
-    renderNews();
+    cloudNewsList = cloudNews.sort((a,b) => (b.id||0) - (a.id||0));
+    combineAndRenderNews();
   });
 
   db.collection("unlocks").onSnapshot((snap) => {
@@ -722,18 +762,4 @@ initAuth();
 fetchMarket();
 
 
-async function updateFearAndGreed() {
-  try {
-    const res = await fetch('https://api.alternative.me/fng/');
-    const data = await res.json();
-    if (data && data.data && data.data.length > 0) {
-      const val = data.data[0].value;
-      const text = data.data[0].value_classification;
-      const el = document.getElementById('fear-greed-value');
-      if (el) el.innerText = val + ' (' + text + ')';
-    }
-  } catch (e) {
-    console.log('Fear & Greed load error:', e);
-  }
-}
-document.addEventListener('DOMContentLoaded', updateFearAndGreed);
+
