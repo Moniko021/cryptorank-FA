@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
   <script src="firebase-config.js"></script>
 </head>
 <body>
@@ -36,11 +37,20 @@
       </div>
 
       <div id="google-form" class="google-form-box">
-        <div style="font-size:13px; font-weight:800; margin-bottom:10px; color:#60a5fa;">اتصال حساب گوگل (ذخیره برای ورودهای بعدی)</div>
-        <input id="g-name" class="inp" type="text" placeholder="نام و نام خانوادگی شما (مثلاً کوروش)">
-        <input id="g-email" class="inp" type="email" placeholder="آدرس جیمیل (example@gmail.com)" style="direction:ltr; text-align:left;">
-        <button onclick="submitGoogleLogin()" class="spin-btn" style="width:100%; margin-bottom:8px;">✅ ثبت و ورود دائمی</button>
-        <button onclick="hideGoogleForm()" style="width:100%; background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:6px;">بازگشت</button>
+        <div id="otp-step-1">
+          <div style="font-size:13px; font-weight:800; margin-bottom:10px; color:#60a5fa;">ورود با جیمیل (همراه با کد تایید امنیتی)</div>
+          <input id="g-name" class="inp" type="text" placeholder="نام شما (مثلاً کوروش)">
+          <input id="g-email" class="inp" type="email" placeholder="آدرس جیمیل (example@gmail.com)" style="direction:ltr; text-align:left;">
+          <button id="send-otp-btn" onclick="sendVerificationCode()" class="spin-btn" style="width:100%; margin-bottom:8px;">📨 ارسال کد تایید به جیمیل</button>
+          <button onclick="hideGoogleForm()" style="width:100%; background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:6px;">بازگشت</button>
+        </div>
+        <div id="otp-step-2" style="display:none;">
+          <div style="font-size:13px; font-weight:800; margin-bottom:6px; color:#10b981;">✅ کد ۶ رقمی به جیمیل شما ارسال شد!</div>
+          <div id="otp-email-preview" style="font-size:11px; color:var(--muted); margin-bottom:12px; direction:ltr; text-align:center;"></div>
+          <input id="g-otp-code" class="inp" type="number" placeholder="کد ۶ رقمی را وارد کنید (مثلاً 123456)" style="direction:ltr; text-align:center; font-size:16px; font-weight:bold; letter-spacing:4px;">
+          <button onclick="verifyAndLogin()" class="spin-btn" style="width:100%; margin-bottom:8px; background:linear-gradient(90deg, #10b981, #059669);">🔐 تایید کد و ورود به حساب</button>
+          <button onclick="resetOtpStep()" style="width:100%; background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:6px;">✏️ ویرایش آدرس جیمیل / ارسال مجدد</button>
+        </div>
       </div>
     </div>
   </div>
@@ -216,6 +226,6 @@
 
   <div id="modal" class="modal" onclick="closeModal()"><div class="modal-box" onclick="event.stopPropagation()"><div id="modal-body"></div></div></div>
 
-  <script src="app.js?v=120"></script>
+  <script src="app.js?v=135"></script>
 </body>
 </html>

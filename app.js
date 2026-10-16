@@ -143,31 +143,22 @@ function initAuth() {
   }
 }
 
-async function realGoogleSignIn() {
-  try {
-      showGoogleForm();
-      return;
-    }
-    const provider = new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-    const result = await auth.signInWithPopup(provider);
-    const user = result.user;
-    if (user && user.email) {
-      await loginOrRestoreCloudUser({
-        uid: user.uid,
-        name: user.displayName || user.email.split('@')[0],
-        email: user.email,
-        photo: user.photoURL || ''
-      });
-    }
-  } catch (err) {
-    showGoogleForm();
-  }
+// تنظیمات EmailJS برای ارسال کد به جیمیل
+const EMAILJS_PUBLIC_KEY = '8ajZprWhO5Ui9IvfD'; 
+const EMAILJS_SERVICE_ID = 'service_wgdnhlj';
+const EMAILJS_TEMPLATE_ID = 'template_f4xspnv';
+
+let generatedOTP = null;
+let pendingUser = null;
+
+function realGoogleSignIn() {
+  showGoogleForm();
 }
 
 function showGoogleForm() {
   document.getElementById('auth-main-btns').style.display = 'none';
   document.getElementById('google-form').style.display = 'block';
+  resetOtpStep();
   if (savedGoogleAccount) {
     document.getElementById('g-name').value = savedGoogleAccount.name || '';
     document.getElementById('g-email').value = savedGoogleAccount.email || '';
@@ -179,13 +170,63 @@ function hideGoogleForm() {
   document.getElementById('auth-main-btns').style.display = 'block';
 }
 
-async function submitGoogleLogin() {
+function resetOtpStep() {
+  const s1 = document.getElementById('otp-step-1');
+  const s2 = document.getElementById('otp-step-2');
+  if (s1) s1.style.display = 'block';
+  if (s2) s2.style.display = 'none';
+  const codeInp = document.getElementById('g-otp-code');
+  if (codeInp) codeInp.value = '';
+}
+
+async function sendVerificationCode() {
   const name = document.getElementById('g-name').value.trim();
   const email = document.getElementById('g-email').value.trim().toLowerCase();
-    alert('لطفاً نام و آدرس جیمیل معتبر وارد کنید.');
+    alert('⚠️ لطفاً نام خود و یک آدرس جیمیل معتبر (پایان یافته با @gmail.com) وارد کنید.');
     return;
   }
-  await loginOrRestoreCloudUser({ name: name, email: email });
+
+  generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+  pendingUser = { name, email };
+
+  const btn = document.getElementById('send-otp-btn');
+  btn.innerText = '⏳ در حال ارسال کد به جیمیل...';
+  btn.disabled = true;
+
+  try {
+    if (EMAILJS_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY' && typeof emailjs !== 'undefined') {
+      emailjs.init(EMAILJS_PUBLIC_KEY);
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_name: name,
+        to_email: email,
+        otp_code: generatedOTP
+      });
+      document.getElementById('otp-step-1').style.display = 'none';
+      document.getElementById('otp-step-2').style.display = 'block';
+      document.getElementById('otp-email-preview').innerText = email;
+    } else {
+      alert('⚠️ سرویس ایمیل هنوز متصل نشده است. لطفاً کلیدهای EmailJS را تنظیم کنید.');
+    }
+  } catch (err) {
+    console.log('Email send error:', err);
+    alert('❌ خطا در ارسال ایمیل. لطفاً اتصال اینترنت یا تنظیمات EmailJS را بررسی کنید.');
+  } finally {
+    btn.innerText = '📨 ارسال کد تایید به جیمیل';
+    btn.disabled = false;
+  }
+}
+
+async function verifyAndLogin() {
+  const enteredCode = document.getElementById('g-otp-code').value.trim();
+    alert('⚠️ لطفاً کد ۶ رقمی را کامل وارد کنید.');
+    return;
+  }
+  if (enteredCode !== generatedOTP) {
+    alert('❌ کد وارد شده اشتباه است! لطفاً جیمیل خود را چک کنید و کد صحیح را بزنید.');
+    return;
+  }
+  generatedOTP = null;
+  await loginOrRestoreCloudUser(pendingUser);
 }
 
 async function quickGoogleLogin() {
