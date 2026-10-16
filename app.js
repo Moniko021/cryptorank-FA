@@ -8,70 +8,132 @@ let currentUser = JSON.parse(localStorage.getItem('cr_active_user')) || null;
 let savedGoogleAccount = JSON.parse(localStorage.getItem('cr_saved_google_user')) || null;
 let savedDrops = JSON.parse(localStorage.getItem('cr_user_saved_drops')) || [];
 
+let userCloudUnsubscribe = null;
+
+function getDocKey(email) {
+  return email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
+
 function syncUserToCloud() {
   if (typeof db !== 'undefined' && currentUser && currentUser.email && currentUser.type === 'google') {
-    const docKey = currentUser.email.replace(/[^a-zA-Z0-9]/g, '_');
+    const docKey = getDocKey(currentUser.email);
+    const lastSpin = currentUser.lastSpin || localStorage.getItem(getSpinStorageKey()) || null;
     db.collection("users").doc(docKey).set({
       name: currentUser.name,
-      email: currentUser.email,
-      points: currentUser.points || 100,
-      savedDrops: savedDrops,
+      email: currentUser.email.trim().toLowerCase(),
+      photo: currentUser.photo || '',
+      points: Number(currentUser.points) || 100,
+      savedDrops: savedDrops || [],
+      lastSpin: lastSpin,
       updatedAt: new Date().toISOString()
-    }, { merge: true }).catch(() => {});
+    }, { merge: true }).catch((e) => console.log('Sync err:', e));
   }
 }
 
-function loadUserFromCloud(email) {
-  if (typeof db === 'undefined' || !email) return;
-  const docKey = email.replace(/[^a-zA-Z0-9]/g, '_');
-  db.collection("users").doc(docKey).get().then((doc) => {
-    if (doc.exists) {
-      const data = doc.data();
-      if (data.points !== undefined && currentUser) {
-        currentUser.points = Math.max(currentUser.points || 0, data.points);
-        localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+async function loginOrRestoreCloudUser(userInfo) {
+  const cleanEmail = userInfo.email.trim().toLowerCase();
+  const docKey = getDocKey(cleanEmail);
+
+  if (typeof db !== 'undefined') {
+    try {
+      const docRef = db.collection("users").doc(docKey);
+      const doc = await docRef.get();
+      if (doc.exists) {
+        const cloudData = doc.data();
+        currentUser = {
+          type: 'google',
+          uid: userInfo.uid || '',
+          name: cloudData.name || userInfo.name,
+          email: cleanEmail,
+          photo: userInfo.photo || cloudData.photo || '',
+          points: cloudData.points !== undefined ? Number(cloudData.points) : 100
+        };
+        savedDrops = Array.isArray(cloudData.savedDrops) ? cloudData.savedDrops : [];
+        if (cloudData.lastSpin) {
+          currentUser.lastSpin = String(cloudData.lastSpin); localStorage.setItem(getSpinStorageKey(), String(cloudData.lastSpin));
+        }
+      } else {
+        currentUser = {
+          type: 'google',
+          uid: userInfo.uid || '',
+          name: userInfo.name,
+          email: cleanEmail,
+          photo: userInfo.photo || '',
+          points: 100
+        };
+        savedDrops = [];
+        await docRef.set({
+          name: currentUser.name,
+          email: cleanEmail,
+          photo: currentUser.photo,
+          points: 100,
+          savedDrops: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
       }
-      if (Array.isArray(data.savedDrops) && data.savedDrops.length > 0) {
-        savedDrops = Array.from(new Set([...savedDrops, ...data.savedDrops]));
+      listenToUserCloud(cleanEmail);
+    } catch (e) {
+      console.log('Cloud restore error:', e);
+    }
+  }
+
+  savedGoogleAccount = { ...currentUser };
+  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+  localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
+  localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
+
+  const authModal = document.getElementById('auth-modal');
+  if (authModal) authModal.classList.remove('show');
+  updateUserHeader();
+  renderLists();
+}
+
+function listenToUserCloud(email) {
+  if (userCloudUnsubscribe) userCloudUnsubscribe();
+  const docKey = getDocKey(email);
+  userCloudUnsubscribe = db.collection("users").doc(docKey).onSnapshot((doc) => {
+    if (doc.exists && currentUser && currentUser.type === 'google') {
+      const data = doc.data();
+      if (data.points !== undefined) currentUser.points = Number(data.points);
+      if (data.name) currentUser.name = data.name;
+      if (Array.isArray(data.savedDrops)) {
+        savedDrops = data.savedDrops;
         localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
       }
+      if (data.lastSpin) {
+        currentUser.lastSpin = String(data.lastSpin); localStorage.setItem(getSpinStorageKey(), String(data.lastSpin));
+      }
+      localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+      localStorage.setItem('cr_saved_google_user', JSON.stringify(currentUser));
+      updateUserHeader();
     }
-  }).catch(() => {});
+  });
 }
 
 function initAuth() {
   if (typeof auth !== 'undefined') {
     auth.onAuthStateChanged((user) => {
-      if (user) {
-        const userObj = {
-          type: 'google',
+      if (user && user.email) {
+        loginOrRestoreCloudUser({
           uid: user.uid,
           name: user.displayName || user.email.split('@')[0],
           email: user.email,
-          photo: user.photoURL || '',
-          points: savedGoogleAccount?.points || 100
-        };
-        currentUser = userObj;
-        savedGoogleAccount = userObj;
-        localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-        localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
-        const authModal = document.getElementById('auth-modal');
-        if (authModal) authModal.classList.remove('show');
-        updateUserHeader();
-        loadUserFromCloud(user.email);
+          photo: user.photoURL || ''
+        });
       }
     });
   }
 
-  if (currentUser && currentUser.type === 'google') {
+  if (currentUser && currentUser.type === 'google' && currentUser.email) {
     updateUserHeader();
-    loadUserFromCloud(currentUser.email);
+    loginOrRestoreCloudUser(currentUser);
     return;
   }
   const authModal = document.getElementById('auth-modal');
   if (authModal) authModal.classList.add('show');
 
-  if (savedGoogleAccount) {
+  if (savedGoogleAccount && savedGoogleAccount.email) {
     const savedBtn = document.getElementById('saved-google-btn');
     const savedTxt = document.getElementById('saved-google-txt');
     if (savedBtn && savedTxt) {
@@ -83,7 +145,6 @@ function initAuth() {
 
 async function realGoogleSignIn() {
   try {
-    if (typeof firebase === 'undefined' || !firebase.auth) {
       showGoogleForm();
       return;
     }
@@ -91,22 +152,13 @@ async function realGoogleSignIn() {
     provider.setCustomParameters({ prompt: 'select_account' });
     const result = await auth.signInWithPopup(provider);
     const user = result.user;
-    if (user) {
-      const userObj = {
-        type: 'google',
+    if (user && user.email) {
+      await loginOrRestoreCloudUser({
         uid: user.uid,
         name: user.displayName || user.email.split('@')[0],
         email: user.email,
-        photo: user.photoURL || '',
-        points: savedGoogleAccount?.points || 100
-      };
-      currentUser = userObj;
-      savedGoogleAccount = userObj;
-      localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-      localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
-      document.getElementById('auth-modal').classList.remove('show');
-      updateUserHeader();
-      syncUserToCloud();
+        photo: user.photoURL || ''
+      });
     }
   } catch (err) {
     showGoogleForm();
@@ -127,47 +179,30 @@ function hideGoogleForm() {
   document.getElementById('auth-main-btns').style.display = 'block';
 }
 
-function submitGoogleLogin() {
+async function submitGoogleLogin() {
   const name = document.getElementById('g-name').value.trim();
-  const email = document.getElementById('g-email').value.trim();
-  if (!name || !email || !email.includes('@')) {
+  const email = document.getElementById('g-email').value.trim().toLowerCase();
     alert('لطفاً نام و آدرس جیمیل معتبر وارد کنید.');
     return;
   }
-  const userObj = {
-    type: 'google',
-    name: name,
-    email: email,
-    points: savedGoogleAccount?.points || 100,
-    loginDate: new Date().toLocaleDateString('fa-IR')
-  };
-  currentUser = userObj;
-  savedGoogleAccount = userObj;
-  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-  localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
-  document.getElementById('auth-modal').classList.remove('show');
-  updateUserHeader();
-  loadUserFromCloud(email);
-  syncUserToCloud();
+  await loginOrRestoreCloudUser({ name: name, email: email });
 }
 
-function quickGoogleLogin() {
-  if (!savedGoogleAccount) return;
-  currentUser = savedGoogleAccount;
-  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-  document.getElementById('auth-modal').classList.remove('show');
-  updateUserHeader();
-  loadUserFromCloud(currentUser.email);
+async function quickGoogleLogin() {
+  await loginOrRestoreCloudUser(savedGoogleAccount);
 }
 
 function loginAnonymously() {
+  if (userCloudUnsubscribe) userCloudUnsubscribe();
   currentUser = {
     type: 'anon',
     name: 'کاربر ناشناس',
     email: 'بدون ایمیل (حالت مهمان)',
     points: 0
   };
+  savedDrops = [];
   localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+  localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
   document.getElementById('auth-modal').classList.remove('show');
   updateUserHeader();
 }
@@ -175,7 +210,6 @@ function loginAnonymously() {
 function updateUserHeader() {
   const avatarEl = document.getElementById('header-user-avatar');
   const nameEl = document.getElementById('header-user-name');
-  if (!currentUser || !avatarEl || !nameEl) return;
 
   if (currentUser.type === 'google') {
     if (currentUser.photo) {
@@ -193,7 +227,6 @@ function updateUserHeader() {
 }
 
 function openProfileModal() {
-  if (!currentUser) {
     document.getElementById('auth-modal').classList.add('show');
     return;
   }
@@ -208,12 +241,12 @@ function openProfileModal() {
       <div style="font-size:12px;color:var(--muted);direction:ltr;">${currentUser.email}</div>
     </div>
     <div style="background:#0b0e14;padding:14px;border-radius:16px;margin-bottom:16px;font-size:12px;line-height:2;">
-      <div>🔐 <b>نوع حساب:</b> <span style="color:${isG?'#10b981':'#eab308'}">${isG ? 'حساب گوگل (متصل به ابر)' : 'ورود ناشناس'}</span></div>
+      <div>🔐 <b>وضعیت حساب:</b> <span style="color:${isG?'#10b981':'#eab308'}">${isG ? 'متصل به فضای ابری (سینک در همه دستگاه‌ها) ☁️' : 'حالت مهمان (فقط روی همین گوشی)'}</span></div>
       <div>🎁 <b>امتیاز پلتفرم:</b> <b style="color:#60a5fa">${currentUser.points || 0} امتیاز</b></div>
       <div>⭐ <b>ایردراپ‌های ذخیره‌شده:</b> <b style="color:#eab308">${savedCount} مورد</b></div>
     </div>
-    ${savedCount > 0 ? `<div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:800;margin-bottom:6px;">لیست ایردراپ‌های شما:</div>${savedDrops.map(d=>`<div style="font-size:11px;background:#0b0e14;padding:6px 10px;border-radius:8px;margin-bottom:4px;color:#10b981;">✓ ${d}</div>`).join('')}</div>` : ''}
-    <button onclick="switchAccount()" style="width:100%;background:#3b82f6;color:#fff;border:none;padding:12px;border-radius:12px;font-weight:bold;margin-bottom:8px;cursor:pointer;">🔄 تغییر حساب / ورود با گوگل</button>
+    ${savedCount > 0 ? `<div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:800;margin-bottom:6px;">لیست ایردراپ‌های ذخیره‌شده در جیمیل شما:</div>${savedDrops.map(d=>`<div style="font-size:11px;background:#0b0e14;padding:6px 10px;border-radius:8px;margin-bottom:4px;color:#10b981;">✓ ${d}</div>`).join('')}</div>` : ''}
+    <button onclick="switchAccount()" style="width:100%;background:#3b82f6;color:#fff;border:none;padding:12px;border-radius:12px;font-weight:bold;margin-bottom:8px;cursor:pointer;">🔄 تغییر حساب / ورود با جیمیل دیگر</button>
     <button onclick="closeModal()" style="width:100%;background:#222838;color:#fff;border:none;padding:11px;border-radius:12px;cursor:pointer;">بستن</button>
   `;
   document.getElementById('modal').classList.add('show');
@@ -221,11 +254,15 @@ function openProfileModal() {
 
 function switchAccount() {
   closeModal();
+  if (userCloudUnsubscribe) userCloudUnsubscribe();
   if (typeof auth !== 'undefined' && auth.currentUser) {
     auth.signOut();
   }
   localStorage.removeItem('cr_active_user');
+  localStorage.removeItem('cr_user_saved_drops');
+  localStorage.removeItem('cr_last_wheel_spin'); localStorage.removeItem('cr_spin_anon_guest');
   currentUser = null;
+  savedDrops = [];
   hideGoogleForm();
   initAuth();
 }
@@ -608,29 +645,54 @@ function showCoinDetail(id) {
   document.getElementById('modal').classList.add('show');
 }
 
+function getSpinStorageKey() {
+  if (currentUser && currentUser.type === 'google' && currentUser.email) {
+    return 'cr_spin_' + currentUser.email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+  }
+  return 'cr_spin_anon_guest';
+}
+
 function spinWheel() {
-  const lastSpin = localStorage.getItem('cr_last_wheel_spin');
-  const now = Date.now();
-  if (lastSpin && (now - parseInt(lastSpin)) < 86400000) {
-    const hoursLeft = Math.ceil((86400000 - (now - parseInt(lastSpin))) / 3600000);
-    alert(`⏳ شما امروز گردونه را چرخانده‌اید! لطفاً ${hoursLeft} ساعت دیگر دوباره امتحان کنید.`);
+    alert('لطفاً ابتدا وارد حساب خود شوید.');
     return;
   }
-  const prizes = ["🎁 ۵۰ امتیاز ایردراپ", "💎 اشتراک VIP روزانه", "🚀 شانس مجدد", "🔥 ۱۰۰ امتیاز ویژه", "🎯 لیست ایردراپ مخفی"];
+  const spinKey = getSpinStorageKey();
+  const lastSpin = currentUser.lastSpin || localStorage.getItem(spinKey);
+  const now = Date.now();
+
+  if (lastSpin && (now - parseInt(lastSpin)) < 86400000) {
+    const hoursLeft = Math.ceil((86400000 - (now - parseInt(lastSpin))) / 3600000);
+    alert(`⏳ حساب (${currentUser.name}) امروز گردونه را چرخانده است! لطفاً ${hoursLeft} ساعت دیگر امتحان کنید.`);
+    return;
+  }
+
+  const prizes = [
+    { name: '🎁 ۵۰ امتیاز ایردراپ', pts: 50 },
+    { name: '💎 اشتراک VIP (۷۵ امتیاز)', pts: 75 },
+    { name: '🚀 شانس طلایی (۳۰ امتیاز)', pts: 30 },
+    { name: '🔥 ۱۰۰ امتیاز ویژه', pts: 100 },
+    { name: '🎯 بسته ایردراپ (۶۰ امتیاز)', pts: 60 }
+  ];
   wheelDeg += 1080 + Math.floor(Math.random() * 360);
   document.getElementById('wheel-el').style.transform = `rotate(${wheelDeg}deg)`;
+
   setTimeout(() => {
     const win = prizes[Math.floor(Math.random() * prizes.length)];
-    localStorage.setItem('cr_last_wheel_spin', Date.now().toString());
-    if (currentUser) {
-      currentUser.points = (currentUser.points || 0) + 50;
-      localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-      if (currentUser.type === 'google') {
-        localStorage.setItem('cr_saved_google_user', JSON.stringify(currentUser));
-        syncUserToCloud();
-      }
+    const spinTime = Date.now().toString();
+    
+    localStorage.setItem(spinKey, spinTime);
+    currentUser.lastSpin = spinTime;
+    currentUser.points = (Number(currentUser.points) || 0) + win.pts;
+    
+    localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+    if (currentUser.type === 'google') {
+      savedGoogleAccount = { ...currentUser };
+      localStorage.setItem('cr_saved_google_user', JSON.stringify(currentUser));
+      syncUserToCloud();
     }
-    alert('🎉 تبریک! برنده شدی: ' + win);
+    updateUserHeader();
+    alert(`🎉 تبریک ${currentUser.name}! برنده شدی: ${win.name}
+امتیاز فعلی شما: ${currentUser.points}`);
   }, 3100);
 }
 
