@@ -720,3 +720,20 @@ function closeModal() { document.getElementById('modal').classList.remove('show'
 renderLists();
 initAuth();
 fetchMarket();
+
+
+async function updateFearAndGreed() {
+  try {
+    const res = await fetch('https://api.alternative.me/fng/');
+    const data = await res.json();
+    if (data && data.data && data.data.length > 0) {
+      const val = data.data[0].value;
+      const text = data.data[0].value_classification;
+      const el = document.getElementById('fear-greed-value');
+      if (el) el.innerText = val + ' (' + text + ')';
+    }
+  } catch (e) {
+    console.log('Fear & Greed load error:', e);
+  }
+}
+document.addEventListener('DOMContentLoaded', updateFearAndGreed);
