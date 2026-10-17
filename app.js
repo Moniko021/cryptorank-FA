@@ -721,6 +721,7 @@ renderLists();
 initAuth();
 fetchMarket();
 
+// === سیستم هماهنگ با ساختار واقعی سایت شما (wheel-section, stories-bar, openPage) ===
 var CR_EMAILJS_KEY = '8ajZprWhO5Ui9IvfD';
 var CR_EMAILJS_SERVICE = 'service_wgdnhlj';
 var CR_EMAILJS_TEMPLATE = 'template_f4xspnv';
@@ -729,21 +730,22 @@ var crPendingUser = null;
 var crUserUnsub = null;
 
 var CR_WHEEL_ITEMS = [
-  { idx: 0, label: '۱ میلیون تومان', amount: 1000000, weight: 0.1 },
-  { idx: 1, label: '۸۰۰ هزار تومان', amount: 800000,  weight: 0.1 },
-  { idx: 2, label: '۵۰۰ هزار تومان', amount: 500000,  weight: 0.1 },
-  { idx: 3, label: '🎁 جایزه ویژه',  amount: 0,       weight: 0.0 },
-  { idx: 4, label: 'پوچ',            amount: 0,       weight: 90.0 },
-  { idx: 5, label: '۱۰۰ هزار تومان', amount: 100000,  weight: 30.0 },
-  { idx: 6, label: '۵۰ هزار تومان',  amount: 50000,   weight: 50.0 },
-  { idx: 7, label: '۱۰ هزار تومان',  amount: 10000,   weight: 90.0 }
+  { idx: 0, short: '۱ میلیون',  label: '۱ میلیون تومان', amount: 1000000, weight: 0.1 },
+  { idx: 1, short: '۸۰۰ هزار',  label: '۸۰۰ هزار تومان', amount: 800000,  weight: 0.1 },
+  { idx: 2, short: '۵۰۰ هزار',  label: '۵۰۰ هزار تومان', amount: 500000,  weight: 0.1 },
+  { idx: 3, short: '🎁',        label: '🎁 جایزه ویژه',  amount: 0,       weight: 0.0 },
+  { idx: 4, short: 'پوچ ❌',    label: 'پوچ',            amount: 0,       weight: 90.0 },
+  { idx: 5, short: '۱۰۰ هزار',  label: '۱۰۰ هزار تومان', amount: 100000,  weight: 30.0 },
+  { idx: 6, short: '۵۰ هزار',   label: '۵۰ هزار تومان',  amount: 50000,   weight: 50.0 },
+  { idx: 7, short: '۱۰ هزار',   label: '۱۰ هزار تومان',  amount: 10000,   weight: 90.0 }
 ];
 
 function getDocKey(e) { return String(e || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_'); }
 function getSpinKey() { return (currentUser && currentUser.type === 'google' && currentUser.email) ? 'cr_spin_' + getDocKey(currentUser.email) : 'cr_spin_guest'; }
 function getVaultKey(e) { return 'cr_vault_' + getDocKey(e); }
 
-function upgradeUIElements() {
+function upgradeRealDOM() {
+  // ۱. فرم کد ۶ رقمی جیمیل
   var gForm = document.getElementById('google-form');
   if (gForm && !document.getElementById('otp-step-1')) {
     gForm.innerHTML =
@@ -763,23 +765,24 @@ function upgradeUIElements() {
       '</div>';
   }
 
-  var wheelBox = document.querySelector('.wheel-box');
-  if (wheelBox && !document.getElementById('wheel-upgraded-flag')) {
-    var labels = ['۱ میلیون', '۸۰۰ هزار', '۵۰۰ هزار', '🎁', 'پوچ ❌', '۱۰۰ هزار', '۵۰ هزار', '۱۰ هزار'];
+  // ۲. تبدیل .wheel-section به گردونه ۸ خانه‌ای با نوشته‌های جوایز و توضیحات زیر آن
+  var wheelSec = document.querySelector('.wheel-section');
+  if (wheelSec && !document.getElementById('wheel-8-done')) {
     var degs = [-67.5, -22.5, 22.5, 67.5, 112.5, 157.5, 202.5, 247.5];
     var cols = ['#000', '#fff', '#fff', '#fff', '#cbd5e1', '#fff', '#fff', '#000'];
-    var slicesHtml = '';
+    var slices = '';
     for (var i = 0; i < 8; i++) {
-      slicesHtml += '<div style="position:absolute;top:50%;left:50%;width:120px;height:22px;margin-top:-11px;transform-origin:0 50%;transform:rotate(' + degs[i] + 'deg);text-align:right;padding-right:10px;font-size:11px;font-weight:900;color:' + cols[i] + ';direction:ltr;">' + labels[i] + '</div>';
+      var fSize = (i === 3) ? '18px' : '11px';
+      slices += '<div style="position:absolute;top:50%;left:50%;width:122px;height:24px;margin-top:-12px;transform-origin:0 50%;transform:rotate(' + degs[i] + 'deg);text-align:right;padding-right:12px;font-size:' + fSize + ';font-weight:900;color:' + cols[i] + ';direction:ltr;line-height:24px;">' + CR_WHEEL_ITEMS[i].short + '</div>';
     }
-    wheelBox.innerHTML =
-      '<div id="wheel-upgraded-flag" style="font-size:16px;font-weight:900;margin-bottom:4px;">🎡 گردونه میلیونی روزانه</div>' +
-      '<div style="font-size:12px;color:var(--muted);">هر ۲۴ ساعت یک‌بار بچرخانید و جایزه نقدی ببرید!</div>' +
-      '<div class="wheel-wrap" style="width:260px;height:260px;margin:18px auto;position:relative;">' +
-        '<div class="wheel-pointer" style="top:-16px;font-size:28px;z-index:25;">🔻</div>' +
+    wheelSec.innerHTML =
+      '<div id="wheel-8-done" style="font-size:17px;font-weight:900;color:#fff;">🎡 گردونه میلیونی روزانه</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-top:4px;">هر ۲۴ ساعت یک‌بار گردونه را بچرخانید و جایزه ببرید!</div>' +
+      '<div style="width:260px;height:260px;margin:18px auto;position:relative;">' +
+        '<div style="position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:28px;z-index:25;">🔻</div>' +
         '<div id="wheel-el" style="width:100%;height:100%;border-radius:50%;position:relative;overflow:hidden;border:5px solid #2a324b;box-shadow:0 0 25px rgba(59,130,246,0.35);transition:transform 4s cubic-bezier(0.15, 0.85, 0.15, 1);background:conic-gradient(#eab308 0deg 45deg, #8b5cf6 45deg 90deg, #ec4899 90deg 135deg, #f97316 135deg 180deg, #334155 180deg 225deg, #10b981 225deg 270deg, #3b82f6 270deg 315deg, #06b6d4 315deg 360deg);">' +
-          slicesHtml +
-          '<div style="position:absolute;inset:0;margin:auto;width:44px;height:44px;background:#131722;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;z-index:10;">🎯</div>' +
+          slices +
+          '<div style="position:absolute;inset:0;margin:auto;width:46px;height:46px;background:#131722;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;z-index:10;">🎯</div>' +
         '</div>' +
       '</div>' +
       '<button class="spin-btn" onclick="spinWheel()">🎯 چرخاندن گردونه شانس</button>' +
@@ -788,26 +791,44 @@ function upgradeUIElements() {
       '</div>';
   }
 
-  var navBar = document.querySelector('.nav-bar');
-  if (navBar && !document.getElementById('nav-profile-btn')) {
-    var profBtn = document.createElement('div');
-    profBtn.className = 'nav-item';
-    profBtn.id = 'nav-profile-btn';
-    profBtn.innerHTML = '<i>👤</i>پروفایل من';
-    profBtn.onclick = function() { switchTab('profile', profBtn); };
-    navBar.insertBefore(profBtn, navBar.firstChild);
+  // ۳. افزودن دکمه استوری «👤 پروفایل من» در نوار .stories-bar و ساخت #page-profile
+  var storiesBar = document.querySelector('.stories-bar');
+  if (storiesBar && !document.getElementById('st-profile')) {
+    var stBtn = document.createElement('button');
+    stBtn.className = 'story-item';
+    stBtn.id = 'st-profile';
+    stBtn.onclick = function() { openPage('profile'); };
+    stBtn.innerHTML = '<div class="story-ring"><div class="story-inner">👤</div></div><span class="story-title">پروفایل من</span>';
+    storiesBar.insertBefore(stBtn, storiesBar.firstChild.nextSibling);
   }
 
-  if (!document.getElementById('sec-profile')) {
-    var secProf = document.createElement('div');
-    secProf.id = 'sec-profile';
-    secProf.className = 'section';
-    secProf.innerHTML = '<div id="profile-page-container"></div>';
-    var convSec = document.getElementById('sec-converter');
-    if (convSec && convSec.parentNode) convSec.parentNode.insertBefore(secProf, convSec.nextSibling);
-    else document.body.appendChild(secProf);
+  if (!document.getElementById('page-profile')) {
+    var pgProf = document.createElement('div');
+    pgProf.id = 'page-profile';
+    pgProf.className = 'view-page';
+    pgProf.innerHTML = '<div class="sec-wrap"><div id="profile-page-container"></div></div>';
+    var convPg = document.getElementById('page-converter');
+    if (convPg && convPg.parentNode) convPg.parentNode.insertBefore(pgProf, convPg.nextSibling);
+    else document.body.appendChild(pgProf);
   }
 }
+
+// بازنویسی تابع openPage برای پشتیبانی از صفحه پروفایل
+openPage = function(p) {
+  currentPage = p;
+  ['home','news','drops','vcs','funding','unlocks','converter','profile'].forEach(function(x) {
+    var pg = document.getElementById('page-' + x);
+    var st = document.getElementById('st-' + x);
+    if (pg) pg.classList.remove('active');
+    if (st) st.classList.remove('active');
+  });
+  var targetPg = document.getElementById('page-' + p);
+  if (targetPg) targetPg.classList.add('active');
+  var activeSt = document.getElementById('st-' + p);
+  if (activeSt) activeSt.classList.add('active');
+  if (p === 'profile') renderProfilePage();
+  window.scrollTo(0, 0);
+};
 
 function saveToLocalVault() {
   if (currentUser && currentUser.type === 'google' && currentUser.email) {
@@ -982,7 +1003,7 @@ function renderProfilePage() {
   var bal = (Number(currentUser.balanceToman) || 0).toLocaleString('fa-IR');
   var pList = Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [];
   var hist = pList.length ? pList.map(function(p){ return '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;"><span style="color:#10b981;font-weight:bold;">🎁 '+p.title+'</span><span style="color:var(--muted);">'+p.date+'</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز جایزه‌ای دریافت نکرده‌اید.</div>';
-  c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-top:10px;"><div style="font-size:17px;font-weight:900;">👤 ' + currentUser.name + '</div><div style="font-size:12px;color:#60a5fa;direction:ltr;text-align:right;margin-bottom:14px;">' + currentUser.email + '</div><div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;"><div style="font-size:11px;color:#94a3b8;">💰 موجودی جوایز (واریز هر جمعه):</div><div style="font-size:22px;font-weight:900;color:#10b981;margin-top:4px;">' + bal + ' تومان</div></div><div style="background:#131824;padding:12px;border-radius:14px;margin-bottom:14px;"><div style="font-size:12px;font-weight:900;color:#60a5fa;margin-bottom:8px;">💳 ثبت آدرس کیف پول (سولانا / اتریوم)</div><input id="inp-sol-wallet" class="inp" type="text" value="' + (currentUser.solWallet||'') + '" placeholder="آدرس کیف پول Solana..." style="direction:ltr;text-align:left;"><input id="inp-eth-wallet" class="inp" type="text" value="' + (currentUser.ethWallet||'') + '" placeholder="آدرس کیف پول Ethereum (0x)..." style="direction:ltr;text-align:left;"><button onclick="saveUserWallets()" class="spin-btn" style="width:100%;background:#10b981;">💾 ذخیره کیف پول</button></div><div style="font-size:13px;font-weight:900;margin-bottom:8px;">🏆 جوایز برنده شده:</div>' + hist + '<button onclick="switchAccount()" style="width:100%;background:#ef4444;color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-top:12px;">🚪 خروج / تغییر جیمیل</button></div>';
+  c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-top:10px;"><div style="font-size:17px;font-weight:900;">👤 ' + currentUser.name + '</div><div style="font-size:12px;color:#60a5fa;direction:ltr;text-align:right;margin-bottom:14px;">' + currentUser.email + '</div><div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;"><div style="font-size:11px;color:#94a3b8;">💰 موجودی جوایز (واریز هر جمعه):</div><div style="font-size:22px;font-weight:900;color:#10b981;margin-top:4px;">' + bal + ' تومان</div></div><div style="background:#131824;padding:12px;border-radius:14px;margin-bottom:14px;"><div style="font-size:12px;font-weight:900;color:#60a5fa;margin-bottom:8px;">💳 ثبت آدرس کیف پول (سولانا / اتریوم)</div><input id="inp-sol-wallet" class="inp" type="text" value="' + (currentUser.solWallet||'') + '" placeholder="آدرس کیف پول Solana..." style="direction:ltr;text-align:left;"><input id="inp-eth-wallet" class="inp" type="text" value="' + (currentUser.ethWallet||'') + '" placeholder="آدرس کیف پول Ethereum (0x)..." style="direction:ltr;text-align:left;"><button onclick="saveUserWallets()" class="spin-btn" style="width:100%;background:#10b981;">💾 ذخیره کیف پول در حساب</button></div><div style="font-size:13px;font-weight:900;margin-bottom:8px;">🏆 جوایز برنده شده:</div>' + hist + '<button onclick="switchAccount()" style="width:100%;background:#ef4444;color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-top:12px;">🚪 خروج / تغییر جیمیل</button></div>';
 }
 
 function saveUserWallets() {
@@ -993,11 +1014,49 @@ function saveUserWallets() {
   alert('✅ کیف پول شما در حساب (' + currentUser.email + ') ذخیره شد!');
 }
 
-openProfileModal = function() { upgradeUIElements(); switchTab('profile', document.getElementById('nav-profile-btn')); renderProfilePage(); };
-var origSwitchTab = switchTab;
-switchTab = function(t, el) { origSwitchTab(t, el); if (t === 'profile') renderProfilePage(); };
+openProfileModal = function() { upgradeRealDOM(); openPage('profile'); };
 
-upgradeUIElements();
+// تضمین دریافت آنی قیمت‌های زنده از CryptoCompare (بدون فیلتر در ایران) + پشتیبان فوری
+async function ensureLivePrices() {
+  if (!coins || coins.length === 0) {
+    coins = [
+      { id: 'bitcoin', symbol: 'btc', name: 'Bitcoin', image: 'https://assets.coincap.io/assets/icons/btc@2x.png', current_price: 89420, price_change_percentage_24h: 3.42, market_cap_rank: 1, high_24h: 91000, low_24h: 87500 },
+      { id: 'ethereum', symbol: 'eth', name: 'Ethereum', image: 'https://assets.coincap.io/assets/icons/eth@2x.png', current_price: 3120, price_change_percentage_24h: 2.15, market_cap_rank: 2, high_24h: 3190, low_24h: 3040 },
+      { id: 'solana', symbol: 'sol', name: 'Solana', image: 'https://assets.coincap.io/assets/icons/sol@2x.png', current_price: 188.5, price_change_percentage_24h: 6.84, market_cap_rank: 3, high_24h: 194, low_24h: 176 },
+      { id: 'binancecoin', symbol: 'bnb', name: 'BNB', image: 'https://assets.coincap.io/assets/icons/bnb@2x.png', current_price: 642, price_change_percentage_24h: 1.12, market_cap_rank: 4, high_24h: 655, low_24h: 635 },
+      { id: 'ripple', symbol: 'xrp', name: 'XRP', image: 'https://assets.coincap.io/assets/icons/xrp@2x.png', current_price: 1.48, price_change_percentage_24h: -1.85, market_cap_rank: 5, high_24h: 1.55, low_24h: 1.44 },
+      { id: 'dogecoin', symbol: 'doge', name: 'Dogecoin', image: 'https://assets.coincap.io/assets/icons/doge@2x.png', current_price: 0.365, price_change_percentage_24h: 8.40, market_cap_rank: 6, high_24h: 0.38, low_24h: 0.33 },
+      { id: 'toncoin', symbol: 'ton', name: 'Toncoin', image: 'https://assets.coincap.io/assets/icons/ton@2x.png', current_price: 5.62, price_change_percentage_24h: -2.30, market_cap_rank: 7, high_24h: 5.80, low_24h: 5.50 },
+      { id: 'cardano', symbol: 'ada', name: 'Cardano', image: 'https://assets.coincap.io/assets/icons/ada@2x.png', current_price: 0.78, price_change_percentage_24h: 4.10, market_cap_rank: 8, high_24h: 0.81, low_24h: 0.74 }
+    ];
+    renderTopCards(); renderFullList(); updateGainersLosersPreview(); populateConverter();
+  }
+  try {
+    var r = await fetch('https://min-api.cryptocompare.com/data/top/mktcapfull?limit=30&tsym=USD');
+    var d = await r.json();
+    if (d && Array.isArray(d.Data) && d.Data.length > 0) {
+      coins = d.Data.map(function(item, idx) {
+        var info = item.CoinInfo || {};
+        var raw = (item.RAW && item.RAW.USD) ? item.RAW.USD : {};
+        var sym = (info.Name || 'btc').toLowerCase();
+        return {
+          id: sym, symbol: sym, name: info.FullName || info.Name,
+          image: 'https://assets.coincap.io/assets/icons/' + sym + '@2x.png',
+          current_price: Number(raw.PRICE) || 1,
+          price_change_percentage_24h: Number(raw.CHANGEPCT24HOUR) || 0,
+          market_cap_rank: idx + 1,
+          high_24h: Number(raw.HIGH24HOUR) || 1,
+          low_24h: Number(raw.LOW24HOUR) || 1
+        };
+      });
+      localStorage.setItem('cr_cached_coins', JSON.stringify(coins));
+      renderTopCards(); renderFullList(); updateGainersLosersPreview(); populateConverter();
+    }
+  } catch(e){}
+}
+
+upgradeRealDOM();
+ensureLivePrices();
 if (currentUser && currentUser.type === 'google' && currentUser.email) {
   var lv = localStorage.getItem(getVaultKey(currentUser.email));
   if (lv) { try { var vd = JSON.parse(lv); currentUser.balanceToman = Math.max(Number(currentUser.balanceToman)||0, Number(vd.balanceToman)||0); if (Array.isArray(vd.prizesList)) currentUser.prizesList = vd.prizesList; if (vd.solWallet) currentUser.solWallet = vd.solWallet; if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet; } catch(e){} }
