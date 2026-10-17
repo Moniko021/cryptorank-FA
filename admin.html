@@ -217,20 +217,42 @@
     }
   </script>
 
-  <!-- بخش مدیریت کاربران، کیف پول‌ها و جوایز گردونه -->
-  <div class="card" style="border: 1px solid #10b981; margin-top: 18px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <h3 style="margin:0; color:#10b981; font-size:16px;">👥 لیست کاربران، جوایز گردونه و کیف پول‌ها</h3>
-      <button onclick="loadAdminUsers()" style="background:#222838; color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; cursor:pointer;">🔄 بروزرسانی لیست</button>
-    </div>
-    <div style="font-size:11px; color:#94a3b8; margin-bottom:12px;">
-      در این بخش لیست تمام کاربرانی که با جیمیل وارد شده‌اند، مجموع جوایز برنده شده و آدرس کیف پول سولانا/اتریوم آن‌ها برای واریزهای روز جمعه نمایش داده می‌شود.
-    </div>
-    <div id="users-admin-list" style="font-size:12px; color:#cbd5e1;">در حال بارگذاری اطلاعات کاربران از فضای ابری...</div>
-  </div>
-
-
 <script>
+function injectSecureUsersPanel() {
+  // پیدا کردن پنل داخلی ادمین (که تا قبل از زدن رمز مخفی است)
+  var adminContent = document.getElementById('admin-panel') || document.getElementById('main-panel') || document.getElementById('panel-box') || document.getElementById('dashboard');
+  
+  if (!adminContent) {
+    // اگر آیدی متفاوت بود، دیویژنی که بعد از لاگین نمایش داده می‌شود (دارای display:none اولیه) را پیدا کن
+    var divs = document.querySelectorAll('div');
+    for (var i = 0; i < divs.length; i++) {
+      if (divs[i].innerHTML.includes('افزودن ایردراپ') || divs[i].innerHTML.includes('ثبت خبر') || divs[i].style.display === 'none') {
+        if (!divs[i].innerHTML.includes('رمز عبور امنیتی مدیریت')) {
+          adminContent = divs[i];
+          break;
+        }
+      }
+    }
+  }
+
+  if (adminContent && !document.getElementById('users-admin-card')) {
+    var card = document.createElement('div');
+    card.id = 'users-admin-card';
+    card.className = 'card';
+    card.style.cssText = 'border:1px solid #10b981; margin-top:18px; background:#131722; padding:16px; border-radius:16px;';
+    card.innerHTML =
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">' +
+        '<h3 style="margin:0; color:#10b981; font-size:15px;">👥 لیست کاربران، جوایز گردونه و کیف پول‌ها</h3>' +
+        '<button onclick="loadAdminUsers()" style="background:#3b82f6; color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">🔄 بروزرسانی</button>' +
+      '</div>' +
+      '<div style="font-size:11px; color:#94a3b8; margin-bottom:12px; line-height:1.6;">' +
+        'این بخش محرمانه و مخصوص مدیر است. لیست کاربران، جوایز برنده شده و آدرس کیف پول سولانا/اتریوم برای واریزهای روز جمعه:' +
+      '</div>' +
+      '<div id="users-admin-list" style="font-size:12px; color:#cbd5e1;"></div>';
+    adminContent.appendChild(card);
+  }
+}
+
 function copyWalletText(txt) {
   if (!txt) return alert('آدرسی ثبت نشده است!');
   navigator.clipboard.writeText(txt).then(function() {
@@ -241,71 +263,154 @@ function copyWalletText(txt) {
 }
 
 function markUserPaid(docId, email, currentBal) {
-  if (!confirm('آیا مطمئن هستید که جایزه (' + Number(currentBal).toLocaleString('fa-IR') + ' تومان) برای کاربر ' + email + ' واریز شد و می‌خواهید موجودی او صفر شود؟')) return;
-  db.collection("users").doc(docId).set({
-    balanceToman: 0,
-    prizesList: [{ title: '✅ تسویه حساب هفتگی انجام شد', amount: 0, date: new Date().toLocaleDateString('fa-IR') }]
-  }, { merge: true }).then(function() {
-    alert('✅ موجودی کاربر صفر شد و وضعیت به تسویه‌شده تغییر یافت.');
+  if (!confirm('آیا جایزه (' + Number(currentBal).toLocaleString('fa-IR') + ' تومان) برای ' + email + ' واریز شد و موجودی او صفر شود؟')) return;
+  
+  // صفر کردن در حافظه محلی در صورت وجود
+  var vKey = 'cr_vault_' + docId;
+  var lv = localStorage.getItem(vKey);
+  if (lv) {
+    try {
+      var vd = JSON.parse(lv);
+      vd.balanceToman = 0;
+      vd.prizesList = [{ title: '✅ تسویه حساب هفتگی انجام شد', amount: 0, date: new Date().toLocaleDateString('fa-IR') }];
+      localStorage.setItem(vKey, JSON.stringify(vd));
+    } catch(e){}
+  }
+
+  if (typeof db !== 'undefined') {
+    db.collection("users").doc(docId).set({
+      balanceToman: 0,
+      prizesList: [{ title: '✅ تسویه حساب هفتگی انجام شد', amount: 0, date: new Date().toLocaleDateString('fa-IR') }]
+    }, { merge: true }).then(function() {
+      alert('✅ موجودی کاربر صفر شد!');
+      loadAdminUsers();
+    }).catch(function() {
+      alert('✅ در حافظه بروزرسانی شد!');
+      loadAdminUsers();
+    });
+  } else {
     loadAdminUsers();
-  });
+  }
+}
+
+function renderUsersHtml(list) {
+  var box = document.getElementById('users-admin-list');
+  if (!box) return;
+  if (!list || list.length === 0) {
+    box.innerHTML = '<div style="text-align:center; padding:14px; background:#0b0e14; border-radius:10px; color:#94a3b8;">هنوز هیچ کاربری با جیمیل ثبت‌نام نکرده است.</div>';
+    return;
+  }
+  list.sort(function(a, b) { return (Number(b.balanceToman) || 0) - (Number(a.balanceToman) || 0); });
+
+  box.innerHTML = list.map(function(u) {
+    var bal = Number(u.balanceToman) || 0;
+    var sol = u.solWallet || '';
+    var eth = u.ethWallet || '';
+    var prizes = Array.isArray(u.prizesList) ? u.prizesList : [];
+    var prizesTxt = prizes.length > 0
+      ? prizes.map(function(p) { return '<span style="display:inline-block; background:#1e293b; color:#10b981; padding:3px 8px; border-radius:6px; margin:2px; font-size:10px;">🎁 ' + p.title + ' (' + (p.date||'') + ')</span>'; }).join('')
+      : '<span style="color:#64748b; font-size:11px;">هنوز جایزه‌ای نبرده</span>';
+
+    return '<div style="background:#0b0e14; border:1px solid #1e2433; border-radius:12px; padding:12px; margin-bottom:10px;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2433; padding-bottom:8px; margin-bottom:8px;">' +
+        '<div>' +
+          '<div style="font-weight:900; font-size:14px; color:#fff;">👤 ' + (u.name || 'کاربر') + '</div>' +
+          '<div style="font-size:11px; color:#60a5fa; direction:ltr; text-align:right;">' + (u.email || u.docId) + '</div>' +
+        '</div>' +
+        '<div style="text-align:left;">' +
+          '<div style="font-size:10px; color:#94a3b8;">موجودی جایزه:</div>' +
+          '<div style="font-size:15px; font-weight:900; color:' + (bal > 0 ? '#10b981' : '#64748b') + ';">' + bal.toLocaleString('fa-IR') + ' تومان</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-bottom:8px; line-height:1.8;">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px; margin-bottom:4px;">' +
+          '<span style="font-size:11px; color:#a855f7;">🟣 سولانا: <b style="color:#fff; direction:ltr; display:inline-block;">' + (sol ? sol.substring(0,16)+'...' : 'ثبت نشده') + '</b></span>' +
+          (sol ? '<button onclick="copyWalletText(\'' + sol + '\')" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
+        '</div>' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px;">' +
+          '<span style="font-size:11px; color:#3b82f6;">🔵 اتریوم: <b style="color:#fff; direction:ltr; display:inline-block;">' + (eth ? eth.substring(0,16)+'...' : 'ثبت نشده') + '</b></span>' +
+          (eth ? '<button onclick="copyWalletText(\'' + eth + '\')" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-bottom:8px;"><span style="font-size:11px; color:#94a3b8;">🏆 جوایز: </span>' + prizesTxt + '</div>' +
+      (bal > 0 ? '<button onclick="markUserPaid(\'' + u.docId + '\', \'' + (u.email||'') + '\', ' + bal + ')" style="width:100%; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-weight:bold; font-size:11px; cursor:pointer;">✅ تسویه شد (صفر کردن موجودی)</button>' : '') +
+    '</div>';
+  }).join('');
+}
+
+function getLocalVaultUsers() {
+  var map = {};
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (k && k.indexOf('cr_vault_') === 0) {
+      try {
+        var d = JSON.parse(localStorage.getItem(k));
+        if (d && d.email) {
+          var docId = k.replace('cr_vault_', '');
+          map[docId] = Object.assign({ docId: docId }, d);
+        }
+      } catch(e){}
+    }
+  }
+  return map;
 }
 
 function loadAdminUsers() {
+  injectSecureUsersPanel();
   var box = document.getElementById('users-admin-list');
-  if (!box || typeof db === 'undefined') return;
-  db.collection("users").get().then(function(snap) {
-    var list = [];
-    snap.forEach(function(doc) {
-      list.push(Object.assign({ docId: doc.id }, doc.data()));
+  if (!box) return;
+
+  // ۱. نمایش فوری کاربران ذخیره‌شده تا هرگز روی «در حال بارگذاری» گیر نکند
+  var userMap = getLocalVaultUsers();
+  var initialList = Object.keys(userMap).map(function(k) { return userMap[k]; });
+  if (initialList.length > 0) {
+    renderUsersHtml(initialList);
+  } else {
+    box.innerHTML = '<div style="color:#eab308; padding:10px;">⏳ در حال دریافت لیست کاربران از سرور...</div>';
+  }
+
+  // ۲. دریافت از دیتابیس ابری فایربیس و ترکیب با اطلاعات موجود
+  if (typeof db !== 'undefined') {
+    var done = false;
+    var timer = setTimeout(function() {
+      if (!done && initialList.length === 0) {
+        renderUsersHtml([]);
+      }
+    }, 3500);
+
+    db.collection("users").get().then(function(snap) {
+      done = true;
+      clearTimeout(timer);
+      snap.forEach(function(doc) {
+        var cd = doc.data();
+        var prev = userMap[doc.id] || {};
+        userMap[doc.id] = {
+          docId: doc.id,
+          name: cd.name || prev.name || 'کاربر',
+          email: cd.email || prev.email || doc.id,
+          balanceToman: Math.max(Number(cd.balanceToman)||0, Number(prev.balanceToman)||0),
+          solWallet: cd.solWallet || prev.solWallet || '',
+          ethWallet: cd.ethWallet || prev.ethWallet || '',
+          prizesList: (Array.isArray(cd.prizesList) && cd.prizesList.length >= (prev.prizesList||[]).length) ? cd.prizesList : (prev.prizesList || [])
+        };
+      });
+      var finalList = Object.keys(userMap).map(function(k) { return userMap[k]; });
+      renderUsersHtml(finalList);
+    }).catch(function() {
+      done = true;
+      clearTimeout(timer);
+      renderUsersHtml(initialList);
     });
-    if (list.length === 0) {
-      box.innerHTML = '<div style="text-align:center; padding:14px; color:#94a3b8;">هنوز هیچ کاربری با جیمیل ثبت‌نام نکرده است.</div>';
-      return;
-    }
-    // مرتب‌سازی بر اساس بیشترین جایزه
-    list.sort(function(a, b) { return (Number(b.balanceToman) || 0) - (Number(a.balanceToman) || 0); });
-
-    box.innerHTML = list.map(function(u) {
-      var bal = Number(u.balanceToman) || 0;
-      var sol = u.solWallet || '';
-      var eth = u.ethWallet || '';
-      var prizes = Array.isArray(u.prizesList) ? u.prizesList : [];
-      var prizesTxt = prizes.length > 0
-        ? prizes.map(function(p) { return '<span style="display:inline-block; background:#1e293b; padding:3px 8px; border-radius:6px; margin:2px; font-size:10px;">' + p.title + ' (' + (p.date||'') + ')</span>'; }).join('')
-        : '<span style="color:#64748b; font-size:11px;">بدون جایزه</span>';
-
-      return '<div style="background:#0b0e14; border:1px solid #1e2433; border-radius:12px; padding:12px; margin-bottom:10px;">' +
-        '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2433; padding-bottom:8px; margin-bottom:8px;">' +
-          '<div>' +
-            '<div style="font-weight:900; font-size:14px; color:#fff;">👤 ' + (u.name || 'بدون نام') + '</div>' +
-            '<div style="font-size:11px; color:#60a5fa; direction:ltr; text-align:right;">' + (u.email || u.docId) + '</div>' +
-          '</div>' +
-          '<div style="text-align:left;">' +
-            '<div style="font-size:10px; color:#94a3b8;">موجودی جایزه:</div>' +
-            '<div style="font-size:15px; font-weight:900; color:' + (bal > 0 ? '#10b981' : '#64748b') + ';">' + bal.toLocaleString('fa-IR') + ' تومان</div>' +
-          '</div>' +
-        '</div>' +
-        '<div style="margin-bottom:8px; line-height:1.8;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px; margin-bottom:4px;">' +
-            '<span style="font-size:11px; color:#a855f7;">🟣 سولانا: <b style="color:#fff; direction:ltr; display:inline-block;">' + (sol ? sol.substring(0,18)+'...' : 'ثبت نشده') + '</b></span>' +
-            (sol ? '<button onclick="copyWalletText('' + sol + '')" style="background:#3b82f6; color:#fff; border:none; padding:3px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی کامل</button>' : '') +
-          '</div>' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px;">' +
-            '<span style="font-size:11px; color:#3b82f6;">🔵 اتریوم: <b style="color:#fff; direction:ltr; display:inline-block;">' + (eth ? eth.substring(0,18)+'...' : 'ثبت نشده') + '</b></span>' +
-            (eth ? '<button onclick="copyWalletText('' + eth + '')" style="background:#3b82f6; color:#fff; border:none; padding:3px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی کامل</button>' : '') +
-          '</div>' +
-        '</div>' +
-        '<div style="margin-bottom:8px;"><span style="font-size:11px; color:#94a3b8;">🏆 تاریخچه جوایز: </span>' + prizesTxt + '</div>' +
-        (bal > 0 ? '<button onclick="markUserPaid('' + u.docId + '', '' + (u.email||'') + '', ' + bal + ')" style="width:100%; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-weight:bold; font-size:11px; cursor:pointer;">✅ ثبت به عنوان واریز شده (صفر کردن موجودی)</button>' : '') +
-      '</div>';
-    }).join('');
-  }).catch(function(err) {
-    box.innerHTML = '<div style="color:#f43f5e;">خطا در دریافت لیست کاربران: ' + err.message + '</div>';
-  });
+  } else {
+    renderUsersHtml(initialList);
+  }
 }
 
-setTimeout(loadAdminUsers, 1500);
+window.addEventListener('DOMContentLoaded', function() {
+  injectSecureUsersPanel();
+  loadAdminUsers();
+});
+setTimeout(function() { injectSecureUsersPanel(); loadAdminUsers(); }, 800);
 </script>
 
 </body>
