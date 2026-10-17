@@ -196,8 +196,7 @@
     function copyWalletText(txt) {
       if (!txt) return alert('آدرسی ثبت نشده است!');
       navigator.clipboard.writeText(txt).then(function() {
-        alert('✅ آدرس کیف پول کپی شد:
-' + txt);
+        alert('✅ آدرس کیف پول کپی شد: ' + txt);
       }).catch(function() {
         prompt('آدرس را کپی کنید:', txt);
       });

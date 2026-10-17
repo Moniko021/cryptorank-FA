@@ -236,7 +236,11 @@
   <div id="page-drops" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🪂 شکار ایردراپ‌ها (آنلاین)</div></div><div id="drops-list"></div></div>
   <div id="page-vcs" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🏛️ سرمایه‌گذاران برتر کریپتو</div></div><div id="vcs-list"></div></div>
   <div id="page-unlocks" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🔓 تقویم آزادسازی توکن‌ها</div></div><div id="unlocks-list"></div></div>
-  <div id="page-converter" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">💱 مبدل لحظه‌ای ارزها</div></div><div class="info-card"><label style="font-size:12px; color:var(--muted);">مقدار ارز:</label><input type="number" id="c-amt" class="inp" value="1" oninput="calcConv()" style="margin-top:6px;"><label style="font-size:12px; color:var(--muted);">انتخاب ارز:</label><select id="c-sel" class="inp" onchange="calcConv()" style="margin-top:6px;"></select><div style="background:#0b0e14; padding:16px; border-radius:14px; text-align:center; margin-top:8px;"><div style="font-size:11px; color:var(--muted);">معادل دلاری:</div><div id="c-res" style="font-size:24px; font-weight:900; color:#10b981; direction:ltr; margin-top:4px;">$0.00</div></div></div></div>
+  <div id="page-converter" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">💱 مبدل لحظه‌ای ارزها</div></div><div class="info-card"><label style="font-size:12px; color:var(--muted);">مقدار ارز:</label><input type="number" id="c-amt" class="inp" value="1" oninput="calcConv()" style="margin-top:6px;"><label style="font-size:12px; color:var(--muted);">انتخاب ارز:</label><select id="c-sel" class="inp" onchange="calcConv()" style="margin-top:6px;"></select><div style="background:#0b0e14; padding:16px; border-radius:14px; text-align:center; margin-top:8px;"><div style="font-size:11px; color:var(--muted);">معادل دلاری:</div><div id="c-res" style="font-size:24px; font-weight:900; color:#10b981; direction:ltr; margin-top:4px;">$0.00</div>
+      <div style="margin-top:12px; padding-top:10px; border-top:1px solid #1e2433; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--muted);">
+        <span>💵 نرخ لحظه‌ای تتر/دلار (تومان): <b id="usdt-live-badge" style="color:#10b981;">آنلاین</b></span>
+        <input type="number" id="c-usdt-rate" value="256000" oninput="calcConv()" style="width:115px; background:#131722; border:1px solid #334155; color:#eab308; font-weight:900; padding:5px 8px; border-radius:8px; text-align:center; direction:ltr; font-size:12px;">
+      </div></div></div></div>
 
   <div id="page-profile" class="view-page"><div class="sec-wrap"><div id="profile-page-container"></div></div></div>
 
@@ -248,6 +252,6 @@
 
   <div id="modal" class="modal" onclick="closeModal()"><div class="modal-box" onclick="event.stopPropagation()"><div id="modal-body"></div></div></div>
 
-  <script src="app.js?v=1100"></script>
+  <script src="app.js?v=1200"></script>
 </body>
 </html>

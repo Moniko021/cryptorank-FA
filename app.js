@@ -915,3 +915,73 @@ fetchCloudData();
 fetchMarket();
 fetchAndTranslateLiveNews();
 setInterval(fetchAndTranslateLiveNews, 180000);
+
+
+// === دریافت زنده و خودکار قیمت لحظه‌ای تتر/دلار به تومان از بازار ایران ===
+window.liveUsdtToman = Number(localStorage.getItem('cr_last_usdt_irt')) || 256000;
+
+async function fetchLiveIranUsdtRate() {
+  var rateInp = document.getElementById('c-usdt-rate');
+  var badge = document.getElementById('usdt-live-badge');
+  if (rateInp && !rateInp.dataset.initialized) {
+    rateInp.value = window.liveUsdtToman;
+    rateInp.dataset.initialized = '1';
+  }
+
+  // تلاش اول: دریافت مستقیم از API نوبیتکس (Nobitex)
+  try {
+    var r1 = await fetch('https://api.nobitex.ir/v2/orderbook/USDTIRT');
+    var d1 = await r1.json();
+    if (d1 && d1.lastTradePrice) {
+      // تبدیل ریال به تومان (تقسیم بر ۱۰)
+      var toman = Math.round(Number(d1.lastTradePrice) / 10);
+      if (toman > 50000) {
+        window.liveUsdtToman = toman;
+        localStorage.setItem('cr_last_usdt_irt', String(toman));
+        if (rateInp) rateInp.value = toman;
+        if (badge) badge.innerText = 'زنده (نوبیتکس)';
+        calcConv();
+        return;
+      }
+    }
+  } catch (e1) {}
+
+  // تلاش دوم (پشتیبان): دریافت از API تترLAND
+  try {
+    var r2 = await fetch('https://api.tetherland.com/currencies');
+    var d2 = await r2.json();
+    if (d2 && d2.data && d2.data.currencies && d2.data.currencies.USDT && d2.data.currencies.USDT.price) {
+      var toman2 = Math.round(Number(d2.data.currencies.USDT.price));
+      if (toman2 > 50000) {
+        window.liveUsdtToman = toman2;
+        localStorage.setItem('cr_last_usdt_irt', String(toman2));
+        if (rateInp) rateInp.value = toman2;
+        if (badge) badge.innerText = 'زنده (تترLAND)';
+        calcConv();
+        return;
+      }
+    }
+  } catch (e2) {}
+
+  calcConv();
+}
+
+calcConv = function() {
+  var amt = parseFloat(document.getElementById('c-amt') ? document.getElementById('c-amt').value : 0) || 0;
+  var id = document.getElementById('c-sel') ? document.getElementById('c-sel').value : '';
+  var c = coins.find(function(x) { return x.id === id; });
+  var usdVal = amt * (c ? c.current_price : 0);
+
+  var rateInp = document.getElementById('c-usdt-rate');
+  var currentRate = rateInp && Number(rateInp.value) > 0 ? Number(rateInp.value) : (window.liveUsdtToman || 256000);
+  var tomanVal = Math.round(usdVal * currentRate);
+
+  var resEl = document.getElementById('c-res');
+  if (resEl) {
+    resEl.innerHTML = '$' + usdVal.toLocaleString(undefined, {maximumFractionDigits: 4}) +
+      '<div style="font-size:15px;color:#eab308;margin-top:8px;direction:rtl;font-weight:900;">≈ ' + tomanVal.toLocaleString('fa-IR') + ' تومان</div>';
+  }
+};
+
+fetchLiveIranUsdtRate();
+setInterval(fetchLiveIranUsdtRate, 60000);
