@@ -367,8 +367,9 @@ function fetchCloudData() {
   db.collection("news").onSnapshot((snap) => {
     const cloudNews = [];
     snap.forEach((doc) => cloudNews.push({ docId: doc.id, ...doc.data() }));
-    newsList = [...cloudNews.sort((a,b) => (b.id||0) - (a.id||0)), ...defaultNews];
-    renderNews();
+    window.crCloudNews = cloudNews.sort((a,b) => (b.id||0) - (a.id||0));
+    if (typeof rebuildAllNews === 'function') rebuildAllNews();
+    else renderNews();
   });
 
   db.collection("unlocks").onSnapshot((snap) => {
@@ -1065,47 +1066,107 @@ if (currentUser && currentUser.type === 'google' && currentUser.email) {
 renderProfilePage();
 
 
-// --- موتور جدید دریافت اخبار زنده کریپتو (بدون تحریم و کاملاً آنلاین) ---
-async function fetchLiveCryptoNews() {
+// === موتور هوشمند اخبار زنده فارسی (بدون بازنویسی توسط فایربیس) ===
+window.crCloudNews = window.crCloudNews || [];
+window.crLiveApiNews = [];
+window.crMarketLiveNews = [];
+
+function rebuildAllNews() {
+  var combined = [].concat(window.crCloudNews || [], window.crLiveApiNews || [], window.crMarketLiveNews || []);
+  if (combined.length > 0) {
+    newsList = combined;
+  }
+  renderNews();
+}
+
+// ساخت گزارش‌های خبری زنده و واقعی از روی قیمت‌های لحظه‌ای بازار
+function generateLiveMarketReports() {
+  if (!coins || coins.length === 0) return;
+  var btc = coins[0];
+  var eth = coins[1] || coins[0];
+  var sorted = [].concat(coins).sort(function(a, b) {
+    return (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0);
+  });
+  var topGainer = sorted[0];
+  var topLoser = sorted[sorted.length - 1];
+  var fngEl = document.querySelector('.gauge-num');
+  var fngVal = fngEl ? fngEl.innerText : '55';
+
+  var nowTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+
+  window.crMarketLiveNews = [
+    {
+      id: 'mkt_btc',
+      title: 'گزارش لحظه‌ای بازار: بیت‌کوین در محدوده $' + Number(btc.current_price).toLocaleString() + ' و شاخص ترس و طمع روی عدد ' + fngVal,
+      source: 'نبض بازار (زنده)',
+      time: 'ساعت ' + nowTime,
+      desc: 'در معاملات ۲۴ ساعت گذشته، بیت‌کوین (BTC) با تغییر ' + (btc.price_change_percentage_24h >= 0 ? '+' : '') + Number(btc.price_change_percentage_24h).toFixed(2) + '% در قیمت $' + Number(btc.current_price).toLocaleString() + ' معامله می‌شود و اتریوم (ETH) در سطح $' + Number(eth.current_price).toLocaleString() + ' قرار دارد.'
+    },
+    {
+      id: 'mkt_gainer',
+      title: 'جهش قیمتی امروز: ارز ' + topGainer.name + ' (' + topGainer.symbol.toUpperCase() + ') با رشد +' + Number(topGainer.price_change_percentage_24h).toFixed(2) + '% صدرنشین بازار شد',
+      source: 'رادار پامپ',
+      time: 'به‌روزرسانی آنی',
+      desc: 'رمزارز ' + topGainer.name + ' با ثبت قیمت $' + Number(topGainer.current_price).toLocaleString() + ' بیشترین بازدهی مثبت را در میان ارزهای برتر بازار به خود اختصاص داده است. در مقابل، ارز ' + topLoser.symbol.toUpperCase() + ' بیشترین اصلاح قیمتی را تجربه کرده است.'
+    }
+  ];
+  rebuildAllNews();
+}
+
+// ترجمه خودکار تیترهای انگلیسی روز دنیا به فارسی
+async function translateToFa(text) {
   try {
-    // استفاده از پروکسی و فیدهای خبری معتبر کریپتو
-    const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent('https://cointelegraph.com/rss'));
-    const data = await res.json();
-    if (data && data.contents) {
-      const parser = new DOMParser();
-      const xml = parser.parseFromString(data.contents, 'text/xml');
-      const items = xml.querySelectorAll('item');
-      if (items && items.length > 0) {
-        const liveNews = [];
-        for (let i = 0; i < Math.min(items.length, 8); i++) {
-          const el = items[i];
-          const title = el.querySelector('title')?.textContent || 'خبر جدید کریپتو';
-          const desc = el.querySelector('description')?.textContent || '';
-          const cleanDesc = desc.replace(/<[^>]*>?/gm, '').substring(0, 140) + '...';
-          liveNews.push({
-            id: 'live_' + i,
-            title: title,
-            source: 'CoinTelegraph',
-            time: 'لحظاتی پیش',
-            desc: cleanDesc
-          });
-        }
-        if (liveNews.length > 0) {
-          newsList = [...liveNews, ...defaultNews];
-          renderNews();
-        }
+    var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=fa&dt=t&q=' + encodeURIComponent(text);
+    var r = await fetch(url);
+    var d = await r.json();
+    if (d && Array.isArray(d[0])) {
+      return d[0].map(function(part) { return part[0]; }).join('');
+    }
+  } catch (e) {}
+  return text;
+}
+
+// دریافت اخبار زنده جهانی از CryptoCompare + ترجمه فوری به فارسی
+async function fetchAndTranslateLiveNews() {
+  generateLiveMarketReports();
+  try {
+    var res = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN');
+    var data = await res.json();
+    if (data && Array.isArray(data.Data) && data.Data.length > 0) {
+      var topItems = data.Data.slice(0, 6);
+      var translatedList = [];
+      for (var i = 0; i < topItems.length; i++) {
+        var item = topItems[i];
+        var faTitle = await translateToFa(item.title);
+        var rawBody = item.body ? item.body.substring(0, 180) + '...' : item.title;
+        var faDesc = await translateToFa(rawBody);
+        var minsAgo = Math.max(1, Math.floor((Date.now() / 1000 - (item.published_on || (Date.now() / 1000))) / 60));
+        var timeStr = minsAgo < 60 ? (minsAgo + ' دقیقه پیش') : (Math.floor(minsAgo / 60) + ' ساعت پیش');
+
+        translatedList.push({
+          id: 'live_fa_' + item.id,
+          title: faTitle,
+          source: (item.source_info && item.source_info.name) ? item.source_info.name : 'CryptoGlobal',
+          time: timeStr,
+          desc: faDesc
+        });
+      }
+      if (translatedList.length > 0) {
+        window.crLiveApiNews = translatedList;
+        rebuildAllNews();
       }
     }
   } catch (e) {
-    // اخبار پشتیبان اضطراری هوشمند اگر اتصال محدود بود
-    newsList = [
-      { id: 'b1', title: 'رکوردشکنی جدید حجم معاملات بازار ارزهای دیجیتال در سال ۲۰۲۶', source: 'CryptoRank FA', time: 'زنده', desc: 'تحلیلگران بازار پیش‌بینی می‌کنند با ورود نقدینگی جدید، روند صعودی ارزهای برتر ادامه داشته باشد.' },
-      { id: 'b2', title: 'گسترش پذیرش شبکه‌های لایه دوم و کاهش چشمگیر کارمزد تراکنش‌ها', source: 'CoinDesk', time: 'زنده', desc: 'فعالیت کاربران روی شبکه‌های مقیاس‌پذیر به دلیل سرعت بالا و کارمزد پایین به اوج رسیده است.' },
-      ...defaultNews
-    ];
-    renderNews();
+    rebuildAllNews();
   }
 }
 
-fetchLiveCryptoNews();
-setInterval(fetchLiveCryptoNews, 300000); // به‌روزرسانی خودکار هر ۵ دقیقه
+// اتصال به دکمه رفرش و آپدیت قیمت‌ها
+var origUpdateGL = updateGainersLosersPreview;
+updateGainersLosersPreview = function() {
+  origUpdateGL();
+  generateLiveMarketReports();
+};
+
+fetchAndTranslateLiveNews();
+setInterval(fetchAndTranslateLiveNews, 180000);
