@@ -1172,7 +1172,7 @@ fetchAndTranslateLiveNews();
 setInterval(fetchAndTranslateLiveNews, 180000);
 
 
-// === ارتقای مهندسی: اسپلش ۲ ثانیه‌ای، آنلاک خودکار آنلاین، فیلتر و آموزش ایردراپ‌ها و صفحه درباره ما ===
+// === ارتقای مهندسی: تقویم ۳۰ روزه آنلاک، ایردراپ اختصاصی ادمین، VCهای Tier 1-5، حذف جذب سرمایه و بخش تسک‌های نقدی ===
 
 // ۱. حذف خودکار صفحه لوگو پس از ۲ ثانیه
 setTimeout(function() {
@@ -1183,141 +1183,252 @@ setTimeout(function() {
   }
 }, 2000);
 
-// ثبت آمار بازدید سایت
-(function trackSiteVisit() {
-  var v = parseInt(localStorage.getItem('cr_total_visits') || '120') + 1;
-  localStorage.setItem('cr_total_visits', v);
-  if (typeof db !== 'undefined') {
-    db.collection("stats").doc("general").set({
-      views: firebase.firestore.FieldValue ? firebase.firestore.FieldValue.increment(1) : v,
-      lastVisit: new Date().toISOString()
-    }, { merge: true }).catch(function(){});
+// ۲. حذف کامل بخش «جذب سرمایه» از منوی بالا و کارت‌های صفحه اصلی
+function removeFundingSection() {
+  var stFund = document.getElementById('st-funding');
+  if (stFund) stFund.style.display = 'none';
+  var pgFund = document.getElementById('page-funding');
+  if (pgFund) pgFund.style.display = 'none';
+  var featCards = document.querySelectorAll('.feat-card');
+  for (var i = 0; i < featCards.length; i++) {
+    var oc = featCards[i].getAttribute('onclick') || '';
+    if (oc.indexOf('funding') !== -1) {
+      featCards[i].style.display = 'none';
+    }
   }
-})();
+}
 
-// ۲. موتور کاملاً خودکار و آنلاین «آنلاک توکن‌ها» (محاسبه روزهای باقی‌مانده و ارزش دلاری زنده از قیمت بازار)
-var AUTO_UNLOCK_SCHEDULES = [
-  { symbol: 'arb', name: 'Arbitrum (ARB)', amountNum: 92650000, amountTxt: '92.65M ARB', unlockDayOfMonth: 16, fallbackPrice: 0.55 },
-  { symbol: 'op', name: 'Optimism (OP)', amountNum: 31340000, amountTxt: '31.34M OP', unlockDayOfMonth: 30, fallbackPrice: 1.60 },
-  { symbol: 'sui', name: 'Sui (SUI)', amountNum: 64190000, amountTxt: '64.19M SUI', unlockDayOfMonth: 1, fallbackPrice: 2.10 },
-  { symbol: 'apt', name: 'Aptos (APT)', amountNum: 11310000, amountTxt: '11.31M APT', unlockDayOfMonth: 12, fallbackPrice: 9.20 },
-  { symbol: 'tia', name: 'Celestia (TIA)', amountNum: 17500000, amountTxt: '17.50M TIA', unlockDayOfMonth: 28, fallbackPrice: 5.10 },
-  { symbol: 'strk', name: 'Starknet (STRK)', amountNum: 64000000, amountTxt: '64.00M STRK', unlockDayOfMonth: 15, fallbackPrice: 0.45 },
-  { symbol: 'sei', name: 'Sei (SEI)', amountNum: 55560000, amountTxt: '55.56M SEI', unlockDayOfMonth: 15, fallbackPrice: 0.42 },
-  { symbol: 'zk', name: 'ZKsync (ZK)', amountNum: 173000000, amountTxt: '173.0M ZK', unlockDayOfMonth: 17, fallbackPrice: 0.14 }
+// ۳. اضافه کردن بخش «تسک‌های پاداش نقدی» در زیر گردونه (مخصوص حساب جیمیل وارد شده)
+function injectUserTasksSection() {
+  var wheelSec = document.querySelector('.wheel-section');
+  if (!wheelSec || document.getElementById('user-cash-tasks-box')) return;
+
+  var taskBox = document.createElement('div');
+  taskBox.id = 'user-cash-tasks-box';
+  taskBox.style.cssText = 'margin-top:16px; background:#131722; border:1px solid #22293a; border-radius:18px; padding:16px; text-align:right;';
+  wheelSec.appendChild(taskBox);
+  renderUserTasksBox();
+}
+
+function renderUserTasksBox() {
+  var box = document.getElementById('user-cash-tasks-box');
+  if (!box) return;
+
+  if (!currentUser || currentUser.type !== 'google') {
+    box.innerHTML =
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
+        '<div style="font-size:15px; font-weight:900; color:#fff;">🎯 تسک‌های پاداش نقدی</div>' +
+        '<span class="badge" style="color:#eab308;">ویژه اعضا</span>' +
+      '</div>' +
+      '<div style="font-size:12px; color:var(--muted); line-height:1.7; margin-bottom:12px;">با انجام تسک‌های روزانه، پاداش نقدی مستقیم در حساب خود دریافت کنید. برای مشاهده تسک‌های اختصاصی خود ابتدا با جیمیل وارد شوید.</div>' +
+      '<button onclick="switchAccount()" class="spin-btn" style="width:100%; padding:10px; font-size:12px;">📧 ورود با جیمیل و فعال‌سازی تسک‌ها</button>';
+    return;
+  }
+
+  var userTasks = Array.isArray(currentUser.completedTasks) ? currentUser.completedTasks : [];
+  box.innerHTML =
+    '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2433; padding-bottom:10px; margin-bottom:12px;">' +
+      '<div>' +
+        '<div style="font-size:15px; font-weight:900; color:#10b981;">🎯 تسک‌های پاداش نقدی (' + currentUser.name + ')</div>' +
+        '<div style="font-size:11px; color:var(--muted); margin-top:2px;">حساب متصل: <span style="color:#60a5fa; direction:ltr; display:inline-block;">' + currentUser.email + '</span></div>' +
+      '</div>' +
+      '<span class="badge" style="background:rgba(16,185,129,0.15); color:#10b981;">' + userTasks.length + ' تسک انجام‌شده</span>' +
+    '</div>' +
+    '<div id="user-tasks-list" style="background:#0b0e14; border:1px dashed #334155; border-radius:14px; padding:16px; text-align:center;">' +
+      '<div style="font-size:24px; margin-bottom:6px;">💰</div>' +
+      '<div style="font-size:13px; font-weight:800; color:#fff; margin-bottom:4px;">بخش تسک‌های نقدی برای حساب شما فعال است</div>' +
+      '<div style="font-size:11px; color:#94a3b8; line-height:1.7;">تسک‌های جدید به زودی در این بخش قرار می‌گیرند. با انجام هر تسک، پاداش نقدی مستقیماً به موجودی حساب شما (قابل برداشت در روز جمعه) اضافه خواهد شد.</div>' +
+    '</div>';
+}
+
+// بروزرسانی خودکار باکس تسک‌ها هنگام تغییر وضعیت کاربر
+var origUpdateHeader2 = updateUserHeader;
+updateUserHeader = function() {
+  origUpdateHeader2();
+  renderUserTasksBox();
+};
+
+// ۴. تقویم کامل توکن‌هایی که در ۳۰ روز آینده آنلاک می‌شوند (محاسبه خودکار روزانه و تاریخ دقیق)
+var FULL_30DAY_UNLOCKS = [
+  { symbol: 'sui',   name: 'Sui (SUI)',               amountNum: 64190000,  amountTxt: '64.19M SUI',   day: 1,  fallbackPrice: 2.15, pct: '2.26%' },
+  { symbol: 'zeta',  name: 'ZetaChain (ZETA)',        amountNum: 53890000,  amountTxt: '53.89M ZETA',  day: 1,  fallbackPrice: 0.68, pct: '9.35%' },
+  { symbol: 'dydx',  name: 'dYdX (DYDX)',             amountNum: 8330000,   amountTxt: '8.33M DYDX',   day: 1,  fallbackPrice: 1.25, pct: '1.30%' },
+  { symbol: 'ena',   name: 'Ethena (ENA)',            amountNum: 40630000,  amountTxt: '40.63M ENA',   day: 2,  fallbackPrice: 0.58, pct: '1.42%' },
+  { symbol: 'kas',   name: 'Kaspa (KAS)',             amountNum: 155600000, amountTxt: '155.6M KAS',   day: 5,  fallbackPrice: 0.14, pct: '0.62%' },
+  { symbol: 'jto',   name: 'Jito (JTO)',              amountNum: 11310000,  amountTxt: '11.31M JTO',   day: 7,  fallbackPrice: 2.65, pct: '8.75%' },
+  { symbol: 'ens',   name: 'Ethereum Name (ENS)',     amountNum: 1460000,   amountTxt: '1.46M ENS',    day: 8,  fallbackPrice: 24.5, pct: '4.30%' },
+  { symbol: 'move',  name: 'Movement (MOVE)',         amountNum: 50000000,  amountTxt: '50.00M MOVE',  day: 9,  fallbackPrice: 0.72, pct: '2.20%' },
+  { symbol: 'cheel', name: 'Cheelee (CHEEL)',         amountNum: 2670000,   amountTxt: '2.67M CHEEL',  day: 10, fallbackPrice: 8.90, pct: '4.70%' },
+  { symbol: 'io',    name: 'io.net (IO)',             amountNum: 2110000,   amountTxt: '2.11M IO',     day: 11, fallbackPrice: 2.10, pct: '1.75%' },
+  { symbol: 'apt',   name: 'Aptos (APT)',             amountNum: 11310000,  amountTxt: '11.31M APT',   day: 12, fallbackPrice: 9.20, pct: '2.18%' },
+  { symbol: 'axl',   name: 'Axelar (AXL)',            amountNum: 24800000,  amountTxt: '24.80M AXL',   day: 13, fallbackPrice: 0.75, pct: '2.85%' },
+  { symbol: 'sand',  name: 'The Sandbox (SAND)',      amountNum: 205590000, amountTxt: '205.5M SAND',  day: 14, fallbackPrice: 0.38, pct: '8.40%' },
+  { symbol: 'strk',  name: 'Starknet (STRK)',         amountNum: 64000000,  amountTxt: '64.00M STRK',  day: 15, fallbackPrice: 0.46, pct: '3.30%' },
+  { symbol: 'sei',   name: 'Sei (SEI)',               amountNum: 55560000,  amountTxt: '55.56M SEI',   day: 15, fallbackPrice: 0.43, pct: '1.45%' },
+  { symbol: 'arb',   name: 'Arbitrum (ARB)',          amountNum: 92650000,  amountTxt: '92.65M ARB',   day: 16, fallbackPrice: 0.56, pct: '2.33%' },
+  { symbol: 'zk',    name: 'ZKsync (ZK)',             amountNum: 173000000, amountTxt: '173.0M ZK',    day: 17, fallbackPrice: 0.15, pct: '4.70%' },
+  { symbol: 'ape',   name: 'ApeCoin (APE)',           amountNum: 15600000,  amountTxt: '15.60M APE',   day: 17, fallbackPrice: 1.12, pct: '2.16%' },
+  { symbol: 'manta', name: 'Manta Network (MANTA)',   amountNum: 6670000,   amountTxt: '6.67M MANTA',  day: 18, fallbackPrice: 0.85, pct: '1.75%' },
+  { symbol: 'pixel', name: 'Pixels (PIXEL)',          amountNum: 54380000,  amountTxt: '54.38M PIXEL', day: 19, fallbackPrice: 0.19, pct: '7.05%' },
+  { symbol: 'zro',   name: 'LayerZero (ZRO)',         amountNum: 25710000,  amountTxt: '25.71M ZRO',   day: 20, fallbackPrice: 3.80, pct: '23.1%' },
+  { symbol: 'scr',   name: 'Scroll (SCR)',            amountNum: 12500000,  amountTxt: '12.50M SCR',   day: 22, fallbackPrice: 0.92, pct: '6.50%' },
+  { symbol: 'id',    name: 'SPACE ID (ID)',           amountNum: 18490000,  amountTxt: '18.49M ID',    day: 22, fallbackPrice: 0.44, pct: '4.29%' },
+  { symbol: 'alt',   name: 'AltLayer (ALT)',          amountNum: 240100000, amountTxt: '240.1M ALT',   day: 25, fallbackPrice: 0.13, pct: '10.4%' },
+  { symbol: 'ron',   name: 'Ronin (RON)',             amountNum: 33400000,  amountTxt: '33.40M RON',   day: 27, fallbackPrice: 1.75, pct: '9.30%' },
+  { symbol: 'tia',   name: 'Celestia (TIA)',          amountNum: 17500000,  amountTxt: '17.50M TIA',   day: 28, fallbackPrice: 5.15, pct: '3.95%' },
+  { symbol: 'portal',name: 'Portal (PORTAL)',         amountNum: 25600000,  amountTxt: '25.60M PORTAL',day: 29, fallbackPrice: 0.34, pct: '6.10%' },
+  { symbol: 'op',    name: 'Optimism (OP)',           amountNum: 31340000,  amountTxt: '31.34M OP',    day: 30, fallbackPrice: 1.62, pct: '2.50%' }
 ];
 
 function updateLiveAutoUnlocks() {
   var now = new Date();
-  var curDay = now.getDate();
-  var computed = AUTO_UNLOCK_SCHEDULES.map(function(item, idx) {
-    var daysLeft = item.unlockDayOfMonth - curDay;
-    if (daysLeft <= 0) daysLeft += 30;
+  var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  var computed = FULL_30DAY_UNLOCKS.map(function(item, idx) {
+    var targetDate = new Date(now.getFullYear(), now.getMonth(), item.day);
+    if (targetDate.getTime() < todayStart) {
+      targetDate = new Date(now.getFullYear(), now.getMonth() + 1, item.day);
+    }
+    var diffDays = Math.round((targetDate.getTime() - todayStart) / 86400000);
+    if (diffDays > 30) diffDays = diffDays % 30;
+
+    var faDate = targetDate.toLocaleDateString('fa-IR', { month: 'long', day: 'numeric' });
     var foundCoin = (coins || []).find(function(c) { return c.symbol && c.symbol.toLowerCase() === item.symbol; });
     var livePrice = foundCoin ? Number(foundCoin.current_price) : item.fallbackPrice;
     var valUsd = (item.amountNum * livePrice) / 1000000;
+
+    var timeLabel = '';
+    if (diffDays === 0) timeLabel = '🔥 امروز (' + faDate + ')';
+    else if (diffDays === 1) timeLabel = '⚡ فردا (' + faDate + ')';
+    else timeLabel = diffDays + ' روز دیگر (' + faDate + ')';
+
     return {
-      id: 'auto_u_' + idx,
+      id: 'u30_' + idx,
       name: item.name,
-      amt: item.amountTxt,
-      val: '$' + valUsd.toFixed(1) + 'M (محاسبه زنده)',
-      time: daysLeft === 1 ? 'فردا (بسیار مهم 🔥)' : (daysLeft + ' روز دیگر'),
-      daysLeft: daysLeft
+      amt: item.amountTxt + ' (' + item.pct + ' عرضه)',
+      val: '$' + valUsd.toFixed(2) + 'M',
+      time: timeLabel,
+      daysLeft: diffDays
     };
   });
+
   computed.sort(function(a, b) { return a.daysLeft - b.daysLeft; });
   unlocks = computed;
-  renderLists();
+  renderUnlocks30Days();
 }
 
-// ۳. دیتابیس جامع پروژه‌های ایردراپ و توکن‌های عرضه‌نشده (با دسته‌بندی، مهلت، لینک رسمی و آموزش گام‌به‌گام)
-var BUILTIN_PRO_DROPS = [
-  {
-    name: 'Monad (تست‌نت رسمی)',
-    cost: 'رایگان',
-    type: 'تست‌نت',
-    chain: 'Monad Testnet (EVM)',
-    vc: 'Paradigm, Dragonfly',
-    raised: '$225,000,000',
-    reward: 'توکن $MON (قطعی)',
-    deadline: 'نزدیک به پایان 🔥',
-    urgent: true,
-    updatedAt: 'امروز (به‌روز)',
-    site: 'https://www.monad.xyz',
-    twitter: 'https://x.com/monad_xyz',
-    link: 'https://testnet.monad.xyz',
-    task: 'بزرگ‌ترین بلاکچین لایه اول EVM با جذب سرمایه ۲۲۵ میلیون دلاری. شرکت در تست‌نت کاملاً رایگان است.',
-    steps: [
-      '۱. ابتدا کیف پول متامسک یا Rabby خود را باز کنید و وارد لینک رسمی تست‌نت شوید.',
-      '۲. از بخش Faucet توکن تستی رایگان MON را دریافت کنید.',
-      '۳. در اکوسیستم تست‌نت حداقل ۵ تراکنش Swap و Mint NFT انجام دهید تا آدرس شما فعال ثبت شود.'
-    ]
-  },
-  {
-    name: 'Abstract Chain (کمپین XP)',
-    cost: 'رایگان',
-    type: 'لایه دوم / تسک اجتماعی',
-    chain: 'Abstract (ZK Stack)',
-    vc: 'Igloo (Pudgy Penguins), Founders Fund',
-    raised: '$11,000,000',
-    reward: 'امتیاز هفتگی XP + ایردراپ',
-    deadline: 'فعال (فصل اول)',
-    urgent: false,
-    updatedAt: 'امروز (به‌روز)',
-    site: 'https://abs.xyz',
-    twitter: 'https://x.com/AbstractChain',
-    link: 'https://portal.abs.xyz',
-    task: 'شبکه لایه دوم مصرف‌کننده‌محور ساخته شده توسط تیم Pudgy Penguins با سیستم امتیازدهی شفاف.',
-    steps: [
-      '۱. وارد پورتال رسمی Abstract شوید و با جیمیل یا کیف پول خود یک حساب بسازید.',
-      '۲. حساب توییتر و دیسکورد خود را در بخش پروفایل متصل کنید تا بج‌های اولیه (Badges) را بگیرید.',
-      '۳. به صورت هفتگی با اپ‌های داخل پورتال تعامل کنید تا XP حساب شما افزایش یابد.'
-    ]
-  },
-  {
-    name: 'Linea Park (LXP-L)',
-    cost: 'نیازمند سرمایه',
-    type: 'لایه دوم / دیفای',
-    chain: 'Linea Mainnet',
-    vc: 'ConsenSys (سازنده متامسک)',
-    raised: '$725,000,000',
-    reward: 'توکن $LINEA',
-    deadline: 'نزدیک به پایان 🔥',
-    urgent: true,
-    updatedAt: 'امروز (به‌روز)',
-    site: 'https://linea.build',
-    twitter: 'https://x.com/LineaBuild',
-    link: 'https://linea.build/activations',
-    task: 'شبکه لایه دوم رسمی شرکت ConsenSys (خالق کیف پول متامسک) در مراحل پایانی قبل از عرضه توکن.',
-    steps: [
-      '۱. مقداری اتریوم (حداقل ۱۰ تا ۲۰ دلار) از طریق بریج به شبکه Linea Mainnet منتقل کنید.',
-      '۲. احراز هویت انسان بودن (Proof of Humanity) را در سایت رسمی Linea تکمیل کنید.',
-      '۳. در یکی از DEXهای شبکه مثل SyncSwap یا Nile تراکنش انجام دهید.'
-    ]
-  },
-  {
-    name: 'Kite AI (هوش مصنوعی)',
-    cost: 'رایگان',
-    type: 'تست‌نت هوش مصنوعی',
-    chain: 'Avalanche AI Subnet',
-    vc: 'General Catalyst, Hashed',
-    raised: '$18,000,000',
-    reward: 'امتیاز روزانه AI XP',
-    deadline: 'فعال (جدید ✨)',
-    urgent: false,
-    updatedAt: 'امروز (به‌روز)',
-    site: 'https://gokite.ai',
-    twitter: 'https://x.com/GoKiteAI',
-    link: 'https://testnet.gokite.ai',
-    task: 'پروژه بلاکچین هوش مصنوعی بدون نیاز به سرمایه؛ فقط با چت کردن روزانه با ایجنت‌های هوش مصنوعی امتیاز بگیرید.',
-    steps: [
-      '۱. کیف پول خود را به داشبورد تست‌نت Kite AI متصل کنید.',
-      '۲. شبکه‌های اجتماعی خود را وصل کرده و روزانه ۳ سوال از چت‌بات‌های هوش مصنوعی داخل سایت بپرسید.',
-      '۳. امتیازات خود را در بخش Leaderboard چک کنید.'
-    ]
-  }
+function renderUnlocks30Days() {
+  var unlocksContainer = document.getElementById('unlocks-list');
+  if (!unlocksContainer) return;
+  unlocksContainer.innerHTML =
+    '<div style="background:#131824;border:1px solid #22293a;padding:10px 12px;border-radius:12px;margin-bottom:12px;font-size:11px;color:#94a3b8;display:flex;justify-content:space-between;align-items:center;">' +
+      '<span>📅 تقویم زنده ۳۰ روز آینده (' + unlocks.length + ' رویداد آنلاک)</span>' +
+      '<span style="color:#10b981;font-weight:bold;">● آپدیت روزانه خودکار</span>' +
+    '</div>' +
+    unlocks.map(function(u) {
+      var isUrgent = u.daysLeft <= 3;
+      return '<div class="info-card" style="border-right:3px solid ' + (isUrgent ? '#fb7185' : '#3b82f6') + ';">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+          '<b style="font-size:15px;">🔓 ' + u.name + '</b>' +
+          '<span class="badge" style="color:' + (isUrgent ? '#fb7185' : '#60a5fa') + ';">⏳ ' + u.time + '</span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);background:#0b0e14;padding:8px 10px;border-radius:10px;">' +
+          '<span>حجم آزادسازی: <b style="color:#fff;">' + u.amt + '</b></span>' +
+          '<span>ارزش دلاری: <b style="color:#10b981;direction:ltr;display:inline-block;">' + u.val + '</b></span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+}
+
+// ۵. دیتابیس کامل سرمایه‌گذاران برتر (VCs) دسته‌بندی شده از Tier 1 تا Tier 5 (مشابه CryptoRank)
+vcs = [
+  // Tier 1
+  { id: 101, tierNum: 1, name: "a16z Crypto (Andreessen Horowitz)", tier: "Tier 1 🏆", fund: "$7.6B", focus: "زیرساخت لایه ۱، هوش مصنوعی و دیفای", projects: "Solana, Sui, Aptos, EigenLayer, LayerZero, Optimism", success: "بالاترین نرخ یونیکورن‌سازی در تاریخ کریپتو", desc: "بزرگ‌ترین و پرنفوذترین صندوق سرمایه‌گذاری خطرپذیر آمریکایی در حوزه وب۳ و بلاکچین." },
+  { id: 102, tierNum: 1, name: "Paradigm", tier: "Tier 1 🏆", fund: "$10.5B", focus: "پروتکل‌های لایه ۱، MEV و صرافی‌های غیرمتمرکز", projects: "Uniswap, Monad, Optimism, Blur, Starknet, Blast", success: "بیش از ۸۵٪ پروژه‌ها با ایردراپ‌های سنگین و رشد ۱۰ برابری", desc: "صندوق تحقیقاتی-سرمایه‌گذاری تاسیس‌شده توسط هم‌بنیان‌گذار کوین‌بیس." },
+  { id: 103, tierNum: 1, name: "YZi Labs (Binance Labs)", tier: "Tier 1 🏆", fund: "$10.0B", focus: "اکوسیستم بایننس، دیفای، گیمینگ و زیرساخت", projects: "Polygon, Sui, Celestia, Pendle, EigenLayer, Aptos", success: "شماره ۱ در لیست شدن مستقیم پروژه‌ها در صرافی بایننس", desc: "بازوی سرمایه‌گذاری رسمی اکوسیستم بایننس با حمایت مستقیم از پروژه‌های مستعد." },
+  { id: 104, tierNum: 1, name: "Polychain Capital", tier: "Tier 1 🏆", fund: "$6.8B", focus: "شبکه‌های ماژولار، لایه اول و پروتکل‌های ZK", projects: "Celestia, Arbitrum, Berachain, EigenLayer, dYdX", success: "پیشگام سرمایه‌گذاری در سید راند (Seed) پروژه‌های زیرساختی", desc: "یکی از قدیمی‌ترین و موفق‌ترین صندوق‌های اختصاصی رمزارز در جهان." },
+  { id: 105, tierNum: 1, name: "Pantera Capital", tier: "Tier 1 🏆", fund: "$5.2B", focus: "زیرساخت وب۳، دیفای و توکن‌های لایه اول", projects: "TON, Solana, Arbitrum, Starknet, 1inch, Ondo", success: "اولین صندوق سرمایه‌گذاری نهادی بیت‌کوین و کریپتو در آمریکا", desc: "صندوق پیشرو با تمرکز بر سرمایه‌گذاری زودهنگام در توکن‌ها و سهام شرکت‌های بلاکچینی." },
+  { id: 106, tierNum: 1, name: "Coinbase Ventures", tier: "Tier 1 🏆", fund: "$4.5B", focus: "اکوسیستم Base، لایه ۲، کیف پول‌ها و زیرساخت", projects: "Arbitrum, Optimism, EigenLayer,Sui, Aptos, Wormhole", success: "پشتوانه مستقیم برای لیست شدن در صرافی Coinbase", desc: "بازوی سرمایه‌گذاری صرافی کوین‌بیس با بیشترین تعداد سرمایه‌گذاری فعال در کریپتو." },
+
+  // Tier 2
+  { id: 201, tierNum: 2, name: "Dragonfly Capital", tier: "Tier 2 🥈", fund: "$3.2B", focus: "دیفای، لایه اول‌های سریع و زیرساخت کراس‌چین", projects: "Monad, Ethena, Aptos, Avalanche, Near, 1inch", success: "رهبر راندهای سرمایه‌گذاری بزرگ در آسیا و آمریکا", desc: "صندوق بین‌المللی برتر با تمرکز ویژه بر پروتکل‌های مالی غیرمتمرکز پرحجم." },
+  { id: 202, tierNum: 2, name: "Multicoin Capital", tier: "Tier 2 🥈", fund: "$2.8B", focus: "اکوسیستم سولانا، DePIN و زیرساخت‌های مقیاس‌پذیر", projects: "Solana, Render, Helium, io.net, Wormhole, Sei", success: "حامی اصلی اکوسیستم سولانا و پروژه‌های سخت‌افزاری DePIN", desc: "صندوق سرمایه‌گذاری مبتنی بر تزهای تحقیقاتی عمیق در بلاکچین‌های نسل جدید." },
+  { id: 203, tierNum: 2, name: "Framework Ventures", tier: "Tier 2 🥈", fund: "$1.9B", focus: "دیفای، اوراکل‌ها و گیمینگ وب۳", projects: "Chainlink, Aave, Berachain, Synthetix, The Graph", success: "متخصص رشد اکوسیستم‌های دیفای و تامین نقدینگی", desc: "یکی از بزرگ‌ترین سرمایه‌گذاران اولیه در پروژه‌های بنیادین دیفای." },
+  { id: 204, tierNum: 2, name: "Blockchain Capital", tier: "Tier 2 🥈", fund: "$2.4B", focus: "پروتکل‌های لایه ۲، زیرساخت امنیت و دیفای", projects: "EigenLayer, ZKsync, Worldcoin, Aave, OpenSea", success: "بیش از ۱۵۰ سرمایه‌گذاری موفق از سال ۲۰۱۳", desc: "از باسابقه‌ترین شرکت‌های ونتچر کپیتال اختصاصی صنعت بلاکچین." },
+  { id: 205, tierNum: 2, name: "Electric Capital", tier: "Tier 2 🥈", fund: "$2.0B", focus: "ابزارهای توسعه‌دهندگان، لایه ۱ و شبکه بیت‌کوین", projects: "Monad, Near, dYdX, Scroll, Frax, Bitwise", success: "منتشرکننده معتبرترین گزارش سالانه توسعه‌دهندگان کریپتو", desc: "صندوق مهندسی‌محور که توسط برنامه‌نویسان و کارآفرینان سابق سیلیکون‌ولی اداره می‌شود." },
+
+  // Tier 3
+  { id: 301, tierNum: 3, name: "Animoca Brands", tier: "Tier 3 🥉", fund: "$1.8B", focus: "گیمینگ وب۳، متاورس، NFT و فرهنگ دیجیتال", projects: "The Sandbox, Axie Infinity, Mocaverse, Pixels,TON", success: "بزرگ‌ترین امپراتوری سرمایه‌گذاری در بازی‌های بلاکچینی", desc: "رهبر جهانی در حوزه مالکیت دیجیتال، گیم‌فای و پروژه‌های متاورسی." },
+  { id: 302, tierNum: 3, name: "Jump Crypto", tier: "Tier 3 🥉", fund: "$1.6B", focus: "زیرساخت معاملاتی فرکانس بالا، اوراکل و بریج‌ها", projects: "Wormhole, Pyth Network, Sui, Aptos, Sei, Injective", success: "قدرتمندترین بازارساز (Market Maker) و توسعه‌دهنده زیرساخت", desc: "بخش رمزارز غول معاملاتی Jump Trading با تمرکز بر مهندسی شبکه‌های سریع." },
+  { id: 303, tierNum: 3, name: "Delphi Ventures", tier: "Tier 3 🥉", fund: "$1.2B", focus: "گیمینگ، دیفای نوآورانه و لایه‌های ماژولار", projects: "Ethena, Celestia, dYdX, Gunzilla, Ronin", success: "پشتوانه تحلیلی و اقتصادی قوی در طراحی توکنومیکس پروژه‌ها", desc: "بازوی سرمایه‌گذاری موسسه تحقیقاتی مشهور Delphi Digital." },
+  { id: 304, tierNum: 3, name: "HashKey Capital", tier: "Tier 3 🥉", fund: "$1.5B", focus: "زیرساخت آسیا، اتریوم و شبکه‌های لایه دوم", projects: "Polkadot, Cosmos, Aztec, AltLayer, Scroll", success: "بزرگ‌ترین صندوق نهادی کریپتو در هنگ‌کنگ و شرق آسیا", desc: "پل ارتباطی پروژه‌های بزرگ غربی با بازارها و صرافی‌های آسیایی." },
+  { id: 305, tierNum: 3, name: "Spartan Group", tier: "Tier 3 🥉", fund: "$950M", focus: "دیفای، گیمینگ و مشاوره استراتژیک توکن‌ها", projects: "Arbitrum, Pendle, Celestia, Galxe, Maverick", success: "عملکرد فوق‌العاده در شکار آلت‌کوین‌های پرپتانسیل", desc: "شرکت سرمایه‌گذاری و مشاوره مالی برتر مستقر در سنگاپور و هنگ‌کنگ." },
+
+  // Tier 4
+  { id: 401, tierNum: 4, name: "OKX Ventures", tier: "Tier 4 ⭐", fund: "$800M", focus: "اکوسیستم بیت‌کوین (Ordinals)، لایه ۲ و زیرساخت کیف پول", projects: "LayerZero, Starknet, Scroll, Babylon, Taiko", success: "شانس بالای لیست شدن در صرافی OKX و ادغام در OKX Wallet", desc: "بازوی سرمایه‌گذاری صرافی جهانی OKX با تمرکز بر نوآوری‌های وب۳." },
+  { id: 402, tierNum: 4, name: "CMS Holdings", tier: "Tier 4 ⭐", fund: "$550M", focus: "توکن‌های نقدشونده، دیفای و اکوسیستم‌های نوظهور", projects: "Solana, Injective, Avalanche, Sui, Woo Network", success: "معامله‌گران و سرمایه‌گذاران فعال در مراحل قبل از عرضه", desc: "شرکت سرمایه‌گذاری خصوصی متخصص در بازارهای مشتقه و اکوسیستم‌های لایه اول." },
+  { id: 403, tierNum: 4, name: "Wintermute Ventures", tier: "Tier 4 ⭐", fund: "$650M", focus: "تامین نقدینگی، DEXها و زیرساخت معاملاتی", projects: "Ethena, Arbitrum, Optimism, Blur, ZetaChain", success: "تضمین نقدینگی و بازارسازی حرفه‌ای در لحظه لیست شدن توکن (TGE)", desc: "بازوی سرمایه‌گذاری یکی از بزرگ‌ترین بازارسازان الگوریتمی کریپتو." },
+  { id: 404, tierNum: 4, name: "Mechanism Capital", tier: "Tier 4 ⭐", fund: "$420M", focus: "دیفای، میم‌کوین‌های زیرساختی و گیم‌فای", projects: "Pendle, Thorchain, Star Atlas, Orderly", success: "ورود زودهنگام به ترندهای داغ بازار", desc: "صندوق سرمایه‌گذاری متمرکز بر بهینه‌سازی بازدهی در فضای دیفای." },
+
+  // Tier 5
+  { id: 501, tierNum: 5, name: "DWF Labs", tier: "Tier 5 🔹", fund: "$700M", focus: "بازارسازی، سرمایه‌گذاری OTC و رشد سریع قیمت", projects: "TON, Fetch.ai, Floki, Conflux, Mask Network", success: "ایجاد موج‌های معاملاتی و پامپ‌های پرحجم در کوتاه‌مدت", desc: "بازارساز نسل جدید و سرمایه‌گذار پرکار در توکن‌های در حال رشد." },
+  { id: 502, tierNum: 5, name: "NGC Ventures", tier: "Tier 5 🔹", fund: "$450M", focus: "پروژه‌های زیرساختی آسیا، کراس‌چین و وب۳", projects: "Solana, Polkadot, Oasis, Algorand, Babel", success: "شبکه گسترده ارتباطی با صرافی‌های آسیایی", desc: "صندوق سرمایه‌گذاری نهادی تشکیل‌شده توسط کارآفرینان تکنولوژی." },
+  { id: 503, tierNum: 5, name: "LD Capital", tier: "Tier 5 🔹", fund: "$380M", focus: "آلت‌کوین‌های کوچک و متوسط، متاورس و AI", projects: "Illuvium, Render, Flow,woo, Litentry", success: "حمایت از صدها پروژه در مراحل ابتدایی (Early Stage)", desc: "یکی از فعال‌ترین صندوق‌های سرمایه‌گذاری آسیایی در بازارهای ثانویه و اولیه." },
+  { id: 504, tierNum: 5, name: "Gate Labs / KuCoin Ventures", tier: "Tier 5 🔹", fund: "$300M", focus: "لانچ‌پدها، پروژه‌های جدید و گیمینگ", projects: "Sui, Space ID, Venom,uxlink", success: "تسریع لیست شدن توکن‌ها در صرافی‌های Gate.io و KuCoin", desc: "بازوهای سرمایه‌گذاری صرافی‌های معتبر برای کشف پروژه‌های مستعد." }
 ];
 
+var currentVcTierFilter = 0;
+
+function setupVcsFilterUI() {
+  var vcsPage = document.getElementById('page-vcs');
+  if (!vcsPage || document.getElementById('vcs-filter-box')) return;
+  var headWrap = vcsPage.querySelector('.sec-wrap');
+  if (headWrap) {
+    var fBox = document.createElement('div');
+    fBox.id = 'vcs-filter-box';
+    fBox.innerHTML =
+      '<div class="filter-chips">' +
+        '<button class="f-chip vc-chip active" onclick="setVcTier(0, this)">🌐 همه سطوح (Tier 1-5)</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(1, this)">🏆 Tier 1 (غول‌ها)</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(2, this)">🥈 Tier 2</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(3, this)">🥉 Tier 3</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(4, this)">⭐ Tier 4</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(5, this)">🔹 Tier 5</button>' +
+      '</div>';
+    headWrap.appendChild(fBox);
+  }
+}
+
+function setVcTier(t, btn) {
+  currentVcTierFilter = t;
+  var chips = document.querySelectorAll('.vc-chip');
+  for (var i = 0; i < chips.length; i++) chips[i].classList.remove('active');
+  if (btn) btn.classList.add('active');
+  renderVcsByTier();
+}
+
+function renderVcsByTier() {
+  setupVcsFilterUI();
+  var vcsContainer = document.getElementById('vcs-list');
+  if (!vcsContainer) return;
+  var list = currentVcTierFilter === 0 ? vcs : vcs.filter(function(v) { return v.tierNum === currentVcTierFilter; });
+  var tierColors = { 1: '#eab308', 2: '#3b82f6', 3: '#10b981', 4: '#a855f7', 5: '#64748b' };
+
+  vcsContainer.innerHTML = list.map(function(v) {
+    var col = tierColors[v.tierNum] || '#3b82f6';
+    return '<div class="info-card" onclick="openVCModal(' + v.id + ')" style="border-right:3px solid ' + col + ';">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div style="font-size:15px;font-weight:900;">🏛️ ' + v.name + '</div>' +
+        '<span class="badge" style="color:' + col + ';">' + v.tier + ' | ' + v.fund + '</span>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.6;">' + v.desc + '</div>' +
+      '<div style="font-size:11px;color:#60a5fa;background:#0b0e14;padding:8px 10px;border-radius:10px;">🚀 پورتفولیو: <b style="color:#fff;">' + v.projects + '</b></div>' +
+      '<div style="font-size:11px;color:#10b981;margin-top:6px;">📈 عملکرد: ' + v.success + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ۶. بخش ایردراپ: حذف کامل ایردراپ‌های پیش‌فرض (فقط نمایش ایردراپ‌های ثبت‌شده توسط ادمین در پنل مدیریت با حفظ تمام امکانات)
 var currentDropFilter = 'all';
 
 function setupDropsFilterUI() {
@@ -1330,11 +1441,11 @@ function setupDropsFilterUI() {
     filterBox.innerHTML =
       '<input id="drop-q-inp" class="inp" type="text" placeholder="🔍 جستجوی نام ایردراپ، شبکه یا سرمایه‌گذار..." oninput="renderProDrops()" style="margin-bottom:10px;">' +
       '<div class="filter-chips">' +
-        '<button class="f-chip active" onclick="setDropFilter(\'all\', this)">🌐 همه پروژه‌ها</button>' +
-        '<button class="f-chip" onclick="setDropFilter(\'free\', this)">🆓 کاملاً رایگان</button>' +
-        '<button class="f-chip" onclick="setDropFilter(\'paid\', this)">💰 نیازمند سرمایه</button>' +
-        '<button class="f-chip" onclick="setDropFilter(\'urgent\', this)">🔥 نزدیک به پایان</button>' +
-        '<button class="f-chip" onclick="setDropFilter(\'saved\', this)">⭐ ذخیره‌شده‌ها</button>' +
+        '<button class="f-chip drop-chip active" onclick="setDropFilter(\'all\', this)">🌐 همه پروژه‌ها</button>' +
+        '<button class="f-chip drop-chip" onclick="setDropFilter(\'free\', this)">🆓 رایگان</button>' +
+        '<button class="f-chip drop-chip" onclick="setDropFilter(\'paid\', this)">💰 نیازمند سرمایه</button>' +
+        '<button class="f-chip drop-chip" onclick="setDropFilter(\'urgent\', this)">🔥 نزدیک به پایان</button>' +
+        '<button class="f-chip drop-chip" onclick="setDropFilter(\'saved\', this)">⭐ ذخیره‌شده‌ها</button>' +
       '</div>';
     headWrap.appendChild(filterBox);
   }
@@ -1342,37 +1453,36 @@ function setupDropsFilterUI() {
 
 function setDropFilter(f, btn) {
   currentDropFilter = f;
-  var chips = document.querySelectorAll('.f-chip');
+  var chips = document.querySelectorAll('.drop-chip');
   for (var i = 0; i < chips.length; i++) chips[i].classList.remove('active');
   if (btn) btn.classList.add('active');
   renderProDrops();
 }
 
-function getAllCombinedDrops() {
-  var custom = (cloudDrops || []).map(function(d) {
+function getAllAdminDropsOnly() {
+  return (cloudDrops || []).map(function(d) {
     return {
-      name: d.name,
+      name: d.name || 'پروژه ایردراپ',
       cost: d.cost || 'رایگان',
       type: d.type || 'ایردراپ فعال',
       chain: d.chain || 'Multi-Chain',
-      vc: d.vc || 'نامشخص',
+      vc: d.vc || '-',
       raised: d.raised || '-',
       reward: d.reward || 'توکن پروژه',
       deadline: d.deadline || 'فعال',
       urgent: Boolean(d.urgent),
-      updatedAt: 'ثبت شده توسط ادمین',
+      updatedAt: d.updatedAt || 'به‌روز',
       site: d.site || d.link || '#',
       twitter: d.twitter || 'https://x.com',
       link: d.link || '#',
       task: d.task || '',
       steps: Array.isArray(d.steps) ? d.steps : [
-        '۱. از طریق دکمه زیر وارد صفحه رسمی پروژه شوید.',
-        '۲. کیف پول خود را متصل کرده و مراحل خواسته شده (' + (d.task || 'تسک‌ها') + ') را انجام دهید.',
+        '۱. از طریق دکمه زیر وارد لینک رسمی کمپین شوید.',
+        '۲. کیف پول خود را متصل کرده و مراحل خواسته شده (' + (d.task || 'تسک‌ها') + ') را تکمیل کنید.',
         '۳. پروژه را در پروفایل خود ذخیره کنید تا اطلاعیه‌های بعدی را از دست ندهید.'
       ]
     };
   });
-  return custom.concat(BUILTIN_PRO_DROPS);
 }
 
 function renderProDrops() {
@@ -1380,7 +1490,17 @@ function renderProDrops() {
   var dropsContainer = document.getElementById('drops-list');
   if (!dropsContainer) return;
 
-  var allD = getAllCombinedDrops();
+  var allD = getAllAdminDropsOnly();
+  if (allD.length === 0) {
+    dropsContainer.innerHTML =
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px 16px;text-align:center;color:var(--muted);font-size:13px;">' +
+        '<div style="font-size:32px;margin-bottom:8px;">🪂</div>' +
+        '<div>در حال حاضر هیچ ایردراپی ثبت نشده است.</div>' +
+        '<div style="font-size:11px;margin-top:4px;">از طریق پنل مدیریت (⚙️) می‌توانید ایردراپ‌های مورد نظر خود را اضافه کنید.</div>' +
+      '</div>';
+    return;
+  }
+
   var qEl = document.getElementById('drop-q-inp');
   var q = qEl ? qEl.value.trim().toLowerCase() : '';
 
@@ -1401,7 +1521,7 @@ function renderProDrops() {
   dropsContainer.innerHTML = filtered.map(function(d, idx) {
     var isFree = d.cost.includes('رایگان');
     var isSaved = (savedDrops || []).includes(d.name);
-    var clicks = parseInt(localStorage.getItem('cr_clk_' + d.name) || '42');
+    var clicks = parseInt(localStorage.getItem('cr_clk_' + d.name) || '12');
     return '<div class="info-card" onclick="openProDropDetail(' + idx + ')" style="border-right:3px solid ' + (d.urgent ? '#f43f5e' : (isFree ? '#10b981' : '#eab308')) + ';">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
         '<div style="font-size:16px;font-weight:900;">🪂 ' + d.name + (isSaved ? ' ⭐' : '') + '</div>' +
@@ -1418,7 +1538,7 @@ function renderProDrops() {
       '</div>' +
       '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8;">' +
         '<span>🕒 بروزرسانی: ' + d.updatedAt + ' | 👁️ ' + clicks + ' بازدید</span>' +
-        '<span style="color:#3b82f6;font-weight:bold;">📖 آموزش کامل و لینک‌ها 〈</span>' +
+        '<span style="color:#3b82f6;font-weight:bold;">📖 جزئیات و لینک ورود 〈</span>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -1427,12 +1547,11 @@ function renderProDrops() {
 }
 
 function openProDropDetail(idx) {
-  var list = window.crCurrentFilteredDrops || getAllCombinedDrops();
+  var list = window.crCurrentFilteredDrops || getAllAdminDropsOnly();
   var d = list[idx];
   if (!d) return;
 
-  // ثبت شمارش کلیک پروژه
-  var curClk = parseInt(localStorage.getItem('cr_clk_' + d.name) || '42') + 1;
+  var curClk = parseInt(localStorage.getItem('cr_clk_' + d.name) || '12') + 1;
   localStorage.setItem('cr_clk_' + d.name, curClk);
 
   var isSaved = (savedDrops || []).includes(d.name);
@@ -1448,20 +1567,16 @@ function openProDropDetail(idx) {
     '<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">🕒 آخرین بروزرسانی: ' + d.updatedAt + ' | ⏳ وضعیت: <b style="color:#fb7185;">' + d.deadline + '</b></div>' +
     '<p style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">' + d.task + '</p>' +
     '<div style="background:#0b0e14;padding:12px;border-radius:14px;margin-bottom:14px;font-size:12px;line-height:1.9;">' +
-      '<div>⛓️ <b>شبکه و نوع فعالیت:</b> ' + d.chain + ' (' + d.type + ')</div>' +
+      '<div>⛓️ <b>شبکه:</b> ' + d.chain + '</div>' +
       '<div>🏛️ <b>سرمایه‌گذاران (VCs):</b> <span style="color:#60a5fa">' + d.vc + '</span></div>' +
       '<div>💰 <b>سرمایه جذب‌شده:</b> <span style="color:#10b981">' + d.raised + '</span></div>' +
       '<div>🎁 <b>پاداش کمپین:</b> <span style="color:#eab308">' + d.reward + '</span></div>' +
     '</div>' +
     '<div style="margin-bottom:14px;">' +
-      '<div style="font-size:13px;font-weight:900;color:#fff;margin-bottom:8px;">🎓 آموزش گام‌به‌گام شرکت در ایردراپ:</div>' +
+      '<div style="font-size:13px;font-weight:900;color:#fff;margin-bottom:8px;">🎓 مراحل شرکت در ایردراپ:</div>' +
       stepsHtml +
     '</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">' +
-      '<a href="' + d.site + '" target="_blank" style="background:#1e293b;color:#fff;text-align:center;padding:9px;border-radius:10px;text-decoration:none;font-size:11px;font-weight:bold;">🌐 سایت رسمی</a>' +
-      '<a href="' + d.twitter + '" target="_blank" style="background:#1e293b;color:#60a5fa;text-align:center;padding:9px;border-radius:10px;text-decoration:none;font-size:11px;font-weight:bold;">🐦 توییتر (X) پروژه</a>' +
-    '</div>' +
-    '<a href="' + d.link + '" target="_blank" class="spin-btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px;">🚀 ورود مستقیم به کمپین و شروع تسک‌ها</a>' +
+    '<a href="' + d.link + '" target="_blank" class="spin-btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px;">🚀 ورود مستقیم به ایردراپ و شروع تسک‌ها</a>' +
     '<button onclick="toggleSaveDrop(\'' + d.name + '\'); renderProDrops();" style="width:100%;background:' + (isSaved ? '#ef4444' : '#10b981') + ';color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-bottom:8px;cursor:pointer;">' +
       (isSaved ? '⭐ حذف از ایردراپ‌های من' : '⭐ ذخیره در پروفایل من') +
     '</button>' +
@@ -1469,14 +1584,14 @@ function openProDropDetail(idx) {
   document.getElementById('modal').classList.add('show');
 }
 
-// جایگزینی رندر لیست ایردراپ با نسخه حرفه‌ای
-var origRenderLists = renderLists;
+var origRenderLists2 = renderLists;
 renderLists = function() {
-  origRenderLists();
+  origRenderLists2();
   renderProDrops();
+  renderVcsByTier();
+  renderUnlocks30Days();
 };
 
-// ۴. افزودن فوتر «درباره ما و تماس با ما» در پایین سایت
 function injectAboutFooter() {
   if (document.getElementById('cr-footer')) return;
   var ft = document.createElement('footer');
@@ -1484,37 +1599,14 @@ function injectAboutFooter() {
   ft.style.cssText = 'margin:30px 14px 24px; padding:18px; background:#131722; border:1px solid #1e2433; border-radius:18px; text-align:center; font-size:12px; color:#94a3b8; line-height:1.8;';
   ft.innerHTML =
     '<div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:6px;">crypto<span style="color:#3b82f6;">rank</span> FA</div>' +
-    '<div style="margin-bottom:12px;">اولین پلتفرم جامع فارسی رصد لحظه‌ای بازار کریپتو، شکار ایردراپ‌های معتبر با آموزش گام‌به‌گام، بررسی صندوق‌های سرمایه‌گذاری (VC) و گردونه جوایز هفتگی.</div>' +
-    '<div style="display:flex;justify-content:center;gap:10px;margin-bottom:10px;">' +
-      '<button onclick="openAboutModal()" style="background:#1e293b;color:#fff;border:1px solid #334155;padding:7px 14px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;">ℹ️ درباره ما و قوانین جوایز</button>' +
-      '<button onclick="openContactModal()" style="background:#1e293b;color:#60a5fa;border:1px solid #334155;padding:7px 14px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;">📞 تماس با ما و پشتیبانی</button>' +
-    '</div>' +
-    '<div style="font-size:10px;color:#64748b;">تمامی اطلاعات قیمت‌ها، اخبار و آنلاک توکن‌ها به صورت کاملاً خودکار و آنلاین بروزرسانی می‌شوند. © 2026</div>';
+    '<div style="margin-bottom:12px;">پلتفرم جامع رصد لحظه‌ای بازار کریپتو، شکار ایردراپ‌ها، بررسی صندوق‌های سرمایه‌گذاری (Tier 1-5) و گردونه جوایز هفتگی.</div>' +
+    '<div style="font-size:10px;color:#64748b;">تمامی قیمت‌ها، اخبار و تقویم ۳۰ روزه آنلاک توکن‌ها به صورت خودکار و روزانه بروزرسانی می‌شوند. © 2026</div>';
   document.body.appendChild(ft);
 }
 
-function openAboutModal() {
-  document.getElementById('modal-body').innerHTML =
-    '<h3 style="font-size:17px;font-weight:900;margin-bottom:10px;">ℹ️ درباره کریپتورنک فارسی</h3>' +
-    '<p style="font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:12px;">کریپتورنک فارسی با هدف دسترسی سریع، رایگان و بدون تحریم کاربران ایرانی به داده‌های دست‌اول بازار رمزارزها، پروژه‌های ایردراپ تاییدشده و تقویم آزادسازی توکن‌ها طراحی شده است.</p>' +
-    '<div style="background:#0b0e14;padding:12px;border-radius:12px;font-size:12px;line-height:1.8;margin-bottom:14px;">' +
-      '<b style="color:#10b981;">🎁 قوانین گردونه شانس:</b><br>' +
-      '• هر کاربر دارای حساب جیمیل تاییدشده می‌تواند هر ۲۴ ساعت یک‌بار گردونه را بچرخاند.<br>' +
-      '• جوایز برنده شده در حساب ابری کاربر تجمیع شده و روزهای جمعه به آدرس کیف پول ثبت‌شده در پروفایل واریز می‌گردد.' +
-    '</div>' +
-    '<button onclick="closeModal()" class="spin-btn" style="width:100%;">متوجه شدم</button>';
-  document.getElementById('modal').classList.add('show');
-}
-
-function openContactModal() {
-  document.getElementById('modal-body').innerHTML =
-    '<h3 style="font-size:17px;font-weight:900;margin-bottom:10px;">📞 تماس با تیم کریپتورنک</h3>' +
-    '<p style="font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:14px;">برای معرفی پروژه‌های جدید، گزارش لینک‌های خراب، همکاری تبلیغاتی یا پیگیری واریز جوایز گردونه، می‌توانید از طریق ایمیل رسمی پلتفرم یا بخش پروفایل کاربری با مدیریت در ارتباط باشید.</p>' +
-    '<div style="background:#0b0e14;padding:12px;border-radius:12px;font-size:12px;text-align:center;direction:ltr;color:#60a5fa;margin-bottom:14px;">Support: CryptoRank FA Official</div>' +
-    '<button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن</button>';
-  document.getElementById('modal').classList.add('show');
-}
-
+removeFundingSection();
+injectUserTasksSection();
 updateLiveAutoUnlocks();
 renderProDrops();
+renderVcsByTier();
 injectAboutFooter();
