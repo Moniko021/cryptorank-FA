@@ -722,13 +722,25 @@ initAuth();
 fetchMarket();
 
 
-// --- ارتقای امن سیستم کد تایید جیمیل، سینک ابری و خبرخوان زنده ---
+// === ارتقای کامل: گردونه ۸ خانه‌ای، پروفایل اختصاصی جیمیل، کیف پول و ضد قفل قیمت‌ها ===
 const EMAILJS_PUBLIC_KEY = '8ajZprWhO5Ui9IvfD';
 const EMAILJS_SERVICE_ID = 'service_wgdnhlj';
 const EMAILJS_TEMPLATE_ID = 'template_f4xspnv';
 let generatedOTP = null;
 let pendingUser = null;
 let userUnsub = null;
+
+// لیست ۸ خانه گردونه دقیقاً مطابق زاویه گرافیکی و شانس تعیین‌شده
+const WHEEL_ITEMS = [
+  { idx: 0, label: '۱ میلیون تومان', amount: 1000000, weight: 0.1 },   // 1 در 1000
+  { idx: 1, label: '۸۰۰ هزار تومان', amount: 800000,  weight: 0.1 },   // 1 در 1000
+  { idx: 2, label: '۵۰۰ هزار تومان', amount: 500000,  weight: 0.1 },   // 1 در 1000
+  { idx: 3, label: '🎁 جایزه ویژه',  amount: 0,       weight: 0.0 },   // 0 درصد مطلق
+  { idx: 4, label: 'پوچ',            amount: 0,       weight: 90.0 },  // نسبت شانس 90
+  { idx: 5, label: '۱۰۰ هزار تومان', amount: 100000,  weight: 30.0 },  // نسبت شانس 30
+  { idx: 6, label: '۵۰ هزار تومان',  amount: 50000,   weight: 50.0 },  // نسبت شانس 50
+  { idx: 7, label: '۱۰ هزار تومان',  amount: 10000,   weight: 90.0 }   // نسبت شانس 90
+];
 
 function getDocKey(e) { return e.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'); }
 function getSpinKey() { return (currentUser && currentUser.type === 'google' && currentUser.email) ? 'cr_spin_' + getDocKey(currentUser.email) : 'cr_spin_guest'; }
@@ -740,7 +752,10 @@ function saveToLocalVault() {
     const data = {
       name: currentUser.name,
       email: currentUser.email.trim().toLowerCase(),
-      points: Number(currentUser.points) || 100,
+      balanceToman: Number(currentUser.balanceToman) || 0,
+      prizesList: Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [],
+      solWallet: currentUser.solWallet || '',
+      ethWallet: currentUser.ethWallet || '',
       savedDrops: savedDrops || [],
       lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null
     };
@@ -758,7 +773,10 @@ syncUserToCloud = function() {
       db.collection("users").doc(k).set({
         name: currentUser.name,
         email: currentUser.email.trim().toLowerCase(),
-        points: Number(currentUser.points) || 100,
+        balanceToman: Number(currentUser.balanceToman) || 0,
+        prizesList: Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [],
+        solWallet: currentUser.solWallet || '',
+        ethWallet: currentUser.ethWallet || '',
         savedDrops: savedDrops || [],
         lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
         updatedAt: new Date().toISOString()
@@ -774,10 +792,12 @@ loadUserFromCloud = function(email) {
   userUnsub = db.collection("users").doc(k).onSnapshot((doc) => {
     if (doc.exists && currentUser && currentUser.type === 'google') {
       const d = doc.data();
-      const cloudPts = d.points !== undefined ? Number(d.points) : 100;
-      const localPts = Number(currentUser.points) || 100;
-      currentUser.points = Math.max(cloudPts, localPts);
-      if (d.name) currentUser.name = d.name;
+      currentUser.balanceToman = Math.max(Number(d.balanceToman) || 0, Number(currentUser.balanceToman) || 0);
+      if (Array.isArray(d.prizesList) && d.prizesList.length > (currentUser.prizesList || []).length) {
+        currentUser.prizesList = d.prizesList;
+      }
+      if (d.solWallet && !currentUser.solWallet) currentUser.solWallet = d.solWallet;
+      if (d.ethWallet && !currentUser.ethWallet) currentUser.ethWallet = d.ethWallet;
       if (Array.isArray(d.savedDrops) && d.savedDrops.length > 0) {
         savedDrops = Array.from(new Set([...(savedDrops || []), ...d.savedDrops]));
         localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
@@ -788,6 +808,7 @@ loadUserFromCloud = function(email) {
       }
       saveToLocalVault();
       updateUserHeader();
+      renderProfilePage();
     }
   });
 };
@@ -796,9 +817,12 @@ realGoogleSignIn = function() { showGoogleForm(); };
 quickGoogleLogin = function() { showGoogleForm(); };
 
 function resetOtpStep() {
-  document.getElementById('otp-step-1').style.display = 'block';
-  document.getElementById('otp-step-2').style.display = 'none';
-  document.getElementById('g-otp-code').value = '';
+  const s1 = document.getElementById('otp-step-1');
+  const s2 = document.getElementById('otp-step-2');
+  if (s1) s1.style.display = 'block';
+  if (s2) s2.style.display = 'none';
+  const inp = document.getElementById('g-otp-code');
+  if (inp) inp.value = '';
 }
 
 async function sendVerificationCode() {
@@ -822,7 +846,7 @@ async function sendVerificationCode() {
     document.getElementById('otp-step-2').style.display = 'block';
     document.getElementById('otp-email-preview').innerText = email;
   } catch (err) {
-    alert('خطا در ارسال ایمیل: ' + (err.text || 'تنظیمات EmailJS را چک کنید'));
+    alert('خطا در ارسال ایمیل: ' + (err.text || 'تنظیمات EmailJS را بررسی کنید'));
   } finally {
     btn.innerText = '📨 ارسال کد تایید به جیمیل'; btn.disabled = false;
   }
@@ -836,37 +860,44 @@ async function verifyAndLogin() {
   const k = getDocKey(cleanEmail);
   const vKey = getVaultKey(cleanEmail);
 
-  // ۱. خواندن اطلاعات قبلی این جیمیل از گاوصندوق داخلی
-  let pts = 100, drops = [], lSpin = localStorage.getItem('cr_spin_' + k) || null;
+  let bal = 0, pList = [], solW = '', ethW = '', drops = [], lSpin = localStorage.getItem('cr_spin_' + k) || null;
   const localVault = localStorage.getItem(vKey);
   if (localVault) {
     try {
       const vd = JSON.parse(localVault);
-      if (vd.points !== undefined) pts = Math.max(pts, Number(vd.points));
+      bal = Number(vd.balanceToman) || 0;
+      if (Array.isArray(vd.prizesList)) pList = vd.prizesList;
+      solW = vd.solWallet || '';
+      ethW = vd.ethWallet || '';
       if (Array.isArray(vd.savedDrops)) drops = vd.savedDrops;
       if (vd.lastSpin) lSpin = String(vd.lastSpin);
     } catch(e){}
   }
 
-  // ۲. خواندن اطلاعات این جیمیل از دیتابیس ابری فایربیس و ترکیب با بالاترین مقدار
   if (typeof db !== 'undefined') {
     try {
       const doc = await db.collection("users").doc(k).get();
       if (doc.exists) {
         const d = doc.data();
-        if (d.points !== undefined) pts = Math.max(pts, Number(d.points));
+        bal = Math.max(bal, Number(d.balanceToman) || 0);
+        if (Array.isArray(d.prizesList) && d.prizesList.length > pList.length) pList = d.prizesList;
+        if (d.solWallet) solW = d.solWallet;
+        if (d.ethWallet) ethW = d.ethWallet;
         if (Array.isArray(d.savedDrops)) drops = Array.from(new Set([...drops, ...d.savedDrops]));
         if (d.lastSpin && (!lSpin || Number(d.lastSpin) > Number(lSpin))) lSpin = String(d.lastSpin);
       }
     } catch(e){}
   }
 
-  currentUser = { type: 'google', name: pendingUser.name, email: cleanEmail, points: pts, lastSpin: lSpin };
+  currentUser = {
+    type: 'google', name: pendingUser.name, email: cleanEmail,
+    balanceToman: bal, prizesList: pList, solWallet: solW, ethWallet: ethW, lastSpin: lSpin
+  };
   savedGoogleAccount = Object.assign({}, currentUser);
   savedDrops = drops;
   if (lSpin) localStorage.setItem(getSpinKey(), lSpin);
   localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
-  
+
   saveToLocalVault();
   syncUserToCloud();
   loadUserFromCloud(cleanEmail);
@@ -874,41 +905,168 @@ async function verifyAndLogin() {
   document.getElementById('auth-modal').classList.remove('show');
   updateUserHeader();
   renderLists();
+  renderProfilePage();
 }
 
+// چرخش گردونه ۸ خانه‌ای با توقف دقیق عقربه روی خانه برنده شده
 spinWheel = function() {
-  if (!currentUser) return alert('ابتدا وارد حساب شوید.');
+  if (!currentUser || currentUser.type !== 'google') {
+    alert('⚠️ برای چرخاندن گردونه و ذخیره جوایز، لطفاً ابتدا با جیمیل خود وارد شوید.');
+    document.getElementById('auth-modal').classList.add('show');
+    return;
+  }
   const sk = getSpinKey();
   const last = currentUser.lastSpin || localStorage.getItem(sk);
   const now = Date.now();
   if (last && (now - parseInt(last)) < 86400000) {
     const h = Math.ceil((86400000 - (now - parseInt(last))) / 3600000);
-    return alert('⏳ حساب (' + currentUser.name + ') امروز گردونه را چرخانده است! ' + h + ' ساعت دیگر امتحان کنید.');
+    return alert('⏳ هر اکانت فقط هر ۲۴ ساعت یک‌بار می‌تواند گردونه را بچرخاند! لطفاً ' + h + ' ساعت دیگر امتحان کنید.');
   }
-  const prizes = ["🎁 ۵۰ امتیاز ایردراپ", "💎 اشتراک VIP روزانه", "🚀 شانس مجدد", "🔥 ۱۰۰ امتیاز ویژه"];
-  wheelDeg += 1080 + Math.floor(Math.random() * 360);
-  document.getElementById('wheel-el').style.transform = 'rotate(' + wheelDeg + 'deg)';
+
+  let totalW = WHEEL_ITEMS.reduce((acc, item) => acc + item.weight, 0);
+  let rnd = Math.random() * totalW;
+  let chosen = WHEEL_ITEMS[4];
+  let sumW = 0;
+  for (let i = 0; i < WHEEL_ITEMS.length; i++) {
+    sumW += WHEEL_ITEMS[i].weight;
+    if (rnd <= sumW) { chosen = WHEEL_ITEMS[i]; break; }
+  }
+
+  // تنظیم زاویه دقیق تا مرکز قاچِ انتخاب‌شده دقیقاً زیر عقربه بالا (0 درجه) قرار بگیرد
+  const sliceCenter = chosen.idx * 45 + 22.5;
+  const targetMod = (360 - sliceCenter) % 360;
+  const currentMod = wheelDeg % 360;
+  let diff = targetMod - currentMod;
+  if (diff < 0) diff += 360;
+  wheelDeg += 1800 + diff;
+
+  const wEl = document.getElementById('wheel-el');
+  if (wEl) wEl.style.transform = 'rotate(' + wheelDeg + 'deg)';
+
   setTimeout(() => {
-    const win = prizes[Math.floor(Math.random() * prizes.length)];
     const st = Date.now().toString();
     localStorage.setItem(sk, st);
     currentUser.lastSpin = st;
-    currentUser.points = (Number(currentUser.points) || 0) + 50;
+    if (!Array.isArray(currentUser.prizesList)) currentUser.prizesList = [];
+
+    if (chosen.amount > 0) {
+      currentUser.balanceToman = (Number(currentUser.balanceToman) || 0) + chosen.amount;
+      currentUser.prizesList.unshift({ title: chosen.label, amount: chosen.amount, date: new Date().toLocaleDateString('fa-IR') });
+      alert('🎉 تبریک ' + currentUser.name + '! شما برنده «' + chosen.label + '» شدید! جایزه در پروفایل شما ذخیره شد و روز جمعه واریز می‌شود.');
+    } else {
+      alert('😕 نتیجه گردونه: «پوچ»! اشکالی نداره، ۲۴ ساعت دیگه دوباره شانست رو امتحان کن.');
+    }
     syncUserToCloud();
     updateUserHeader();
-    alert('🎉 تبریک ' + currentUser.name + '! برنده شدی: ' + win + ' (امتیاز کل: ' + currentUser.points + ')');
-  }, 3100);
+    renderProfilePage();
+  }, 4100);
 };
 
-// حفظ تغییر امتیاز هنگام ذخیره ایردراپ‌ها
-const origToggleSaveDrop = typeof toggleSaveDrop === 'function' ? toggleSaveDrop : null;
-if (origToggleSaveDrop) {
-  toggleSaveDrop = function(name) {
-    origToggleSaveDrop(name);
-    syncUserToCloud();
-  };
+// رندر صفحه اختصاصی پروفایل کاربری (مخصوص جیمیل وارد شده)
+function renderProfilePage() {
+  const container = document.getElementById('profile-page-container');
+  if (!container) return;
+
+  if (!currentUser || currentUser.type !== 'google') {
+    container.innerHTML =
+      '<div style="background:var(--card); border:1px solid var(--border); border-radius:20px; padding:28px 18px; text-align:center; margin-top:14px;">' +
+        '<div style="font-size:46px; margin-bottom:10px;">🔐</div>' +
+        '<div style="font-size:16px; font-weight:900; margin-bottom:8px;">پروفایل کاربری اختصاصی</div>' +
+        '<div style="font-size:12px; color:var(--muted); line-height:1.8; margin-bottom:18px;">برای مشاهده جوایز گردونه، موجودی حساب و ثبت آدرس کیف پول سولانا یا اتریوم، لطفاً با حساب جیمیل خود وارد شوید.</div>' +
+        '<button onclick="switchAccount()" class="spin-btn" style="width:100%; max-width:280px;">📧 ورود با حساب جیمیل</button>' +
+      '</div>';
+    return;
+  }
+
+  const bal = (Number(currentUser.balanceToman) || 0).toLocaleString('fa-IR');
+  const pList = Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [];
+  const solW = currentUser.solWallet || '';
+  const ethW = currentUser.ethWallet || '';
+
+  const historyHtml = pList.length > 0
+    ? pList.map(p => '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid #1e2433;font-size:12px;"><span style="color:#10b981;font-weight:bold;">🎁 ' + p.title + '</span><span style="color:var(--muted);">' + p.date + '</span></div>').join('')
+    : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:12px;background:#0b0e14;border-radius:10px;">هنوز جایزه‌ای از گردونه دریافت نکرده‌اید.</div>';
+
+  container.innerHTML =
+    '<div style="background:var(--card); border:1px solid var(--border); border-radius:20px; padding:18px; margin-top:10px;">' +
+      '<div style="display:flex; align-items:center; gap:14px; border-bottom:1px solid var(--border); padding-bottom:14px; margin-bottom:14px;">' +
+        '<div style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#10b981,#059669); color:#fff; font-size:24px; font-weight:900; display:flex; align-items:center; justify-content:center;">' + currentUser.name.charAt(0).toUpperCase() + '</div>' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:17px; font-weight:900;">' + currentUser.name + '</div>' +
+          '<div style="font-size:12px; color:#60a5fa; direction:ltr; text-align:right;">' + currentUser.email + '</div>' +
+          '<div style="font-size:10px; color:#10b981; margin-top:3px;">● حساب تاییدشده و متصل به فضای ابری</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="background:linear-gradient(135deg,#1e293b,#0f172a); border:1px solid #334155; border-radius:16px; padding:16px; text-align:center; margin-bottom:16px;">' +
+        '<div style="font-size:12px; color:#94a3b8; margin-bottom:4px;">💰 مجموع جوایز برنده شده (قابل واریز در روز جمعه):</div>' +
+        '<div style="font-size:24px; font-weight:900; color:#10b981;">' + bal + ' <span style="font-size:13px;">تومان</span></div>' +
+        '<div style="font-size:10px; color:#eab308; margin-top:6px;">واریز به صورت نقدی یا معادل ارز دیجیتال به کیف پول شما</div>' +
+      '</div>' +
+
+      '<div style="background:#131824; border:1px solid #22293a; border-radius:16px; padding:14px; margin-bottom:16px;">' +
+        '<div style="font-size:13px; font-weight:900; color:#60a5fa; margin-bottom:10px;">💳 ثبت آدرس کیف پول (برای دریافت جوایز جمعه)</div>' +
+        '<div style="margin-bottom:10px;">' +
+          '<label style="font-size:11px; color:var(--muted); display:block; margin-bottom:4px;">🟣 آدرس کیف پول سولانا (Solana):</label>' +
+          '<input id="inp-sol-wallet" class="inp" type="text" value="' + solW + '" placeholder="آدرس شبکه Solana خود را وارد کنید..." style="direction:ltr; text-align:left; margin-bottom:0;">' +
+        '</div>' +
+        '<div style="margin-bottom:12px;">' +
+          '<label style="font-size:11px; color:var(--muted); display:block; margin-bottom:4px;">🔵 آدرس کیف پول اتریوم (Ethereum - 0x):</label>' +
+          '<input id="inp-eth-wallet" class="inp" type="text" value="' + ethW + '" placeholder="0x..." style="direction:ltr; text-align:left; margin-bottom:0;">' +
+        '</div>' +
+        '<button onclick="saveUserWallets()" class="spin-btn" style="width:100%; background:linear-gradient(90deg,#10b981,#059669);">💾 ثبت و ذخیره آدرس کیف پول در حساب</button>' +
+      '</div>' +
+
+      '<div style="margin-bottom:16px;">' +
+        '<div style="font-size:13px; font-weight:900; margin-bottom:8px;">🏆 تاریخچه جوایز گردونه شما:</div>' +
+        historyHtml +
+      '</div>' +
+
+      '<button onclick="switchAccount()" style="width:100%; background:#ef4444; color:#fff; border:none; padding:12px; border-radius:12px; font-weight:bold; cursor:pointer;">🚪 خروج یا تغییر حساب جیمیل</button>' +
+    '</div>';
 }
 
+function saveUserWallets() {
+  if (!currentUser || currentUser.type !== 'google') return;
+  const solEl = document.getElementById('inp-sol-wallet');
+  const ethEl = document.getElementById('inp-eth-wallet');
+  currentUser.solWallet = solEl ? solEl.value.trim() : '';
+  currentUser.ethWallet = ethEl ? ethEl.value.trim() : '';
+  syncUserToCloud();
+  alert('✅ آدرس کیف پول سولانا و اتریوم شما با موفقیت در حساب (' + currentUser.email + ') ذخیره شد!');
+}
+
+// وقتی روی دکمه پروفایل هدر بالا کلیک شد، مستقیم برود به تب اختصاصی پروفایل
+openProfileModal = function() {
+  const profNav = document.getElementById('nav-profile-btn');
+  switchTab('profile', profNav);
+  renderProfilePage();
+};
+
+const origSwitchTab = switchTab;
+switchTab = function(tabId, el) {
+  origSwitchTab(tabId, el);
+  if (tabId === 'profile') renderProfilePage();
+};
+
+// بارگذاری اولیه اطلاعات جیمیل ذخیره شده و رندر پروفایل
+if (currentUser && currentUser.type === 'google' && currentUser.email) {
+  const vKey = getVaultKey(currentUser.email);
+  const lv = localStorage.getItem(vKey);
+  if (lv) {
+    try {
+      const vd = JSON.parse(lv);
+      currentUser.balanceToman = Math.max(Number(currentUser.balanceToman)||0, Number(vd.balanceToman)||0);
+      if (Array.isArray(vd.prizesList)) currentUser.prizesList = vd.prizesList;
+      if (vd.solWallet) currentUser.solWallet = vd.solWallet;
+      if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet;
+    } catch(e){}
+  }
+  loadUserFromCloud(currentUser.email);
+}
+renderProfilePage();
+
+// خبرخوان زنده RSS
 fetch('https://api.rss2json.com/v1/api.json?rss_url=https://cointelegraph.com/rss').then(r=>r.json()).then(d=>{
   if (d && Array.isArray(d.items)) {
     const rss = d.items.slice(0, 8).map((x, i) => ({ id: 'rss_'+i, title: x.title, source: 'CoinTelegraph', time: 'زنده', desc: (x.description||'').replace(/<[^>]*>?/gm, '').substring(0, 150)+'...' }));
@@ -916,150 +1074,3 @@ fetch('https://api.rss2json.com/v1/api.json?rss_url=https://cointelegraph.com/rs
     renderNews();
   }
 }).catch(()=>{});
-
-
-// --- سیستم جدید و پیشرفته گردونه ۸ خانه‌ای و کیف پول پروفایل ---
-
-// ساختار ۸ خانه گردونه با جوایز و شانس دقیق خواسته شده
-const WHEEL_SEGS = [
-  { id: '1m', label: '۱ میلیون تومان', type: 'cash', value: 1000000, weight: 0.1 },     // از هر هزار نفر ۱ نفر (0.1 درصد)
-  { id: '800k', label: '۸۰۰ هزار تومان', type: 'cash', value: 800000, weight: 0.1 },   // از هر هزار نفر ۱ نفر
-  { id: '500k', label: '۵۰۰ هزار تومان', type: 'cash', value: 500000, weight: 0.1 },   // از هر هزار نفر ۱ نفر
-  { id: 'gift', label: '🎁 جایزه ویژه', type: 'special', value: 0, weight: 0.0 },       // صفر درصد (کسی برنده نمیشه)
-  { id: 'empty', label: ' پوچ ❌', type: 'empty', value: 0, weight: 45.0 },            // پوچ
-  { id: '100k', label: '۱۰۰ هزار تومان', type: 'cash', value: 100000, weight: 15.0 },  // ۳۰ درصد شانس تقریبی
-  { id: '50k', label: '۵۰ هزار تومان', type: 'cash', value: 50000, weight: 24.7 },     // ۵۰ درصد شانس تقریبی
-  { id: '10k', label: '۱۰ هزار تومان', type: 'cash', value: 10000, weight: 15.0 }     // ۱۰ هزار تومانی
-];
-
-function spinWheel() {
-  if (!currentUser || currentUser.type !== 'google') {
-    alert('⚠️ لطفاً ابتدا با حساب جیمیل خود وارد شوید تا بتوانید گردونه را بچرخانید.');
-    if (typeof initAuth === 'function') initAuth();
-    return;
-  }
-  
-  const sk = getSpinKey();
-  const last = currentUser.lastSpin || localStorage.getItem(sk);
-  const now = Date.now();
-  if (last && (now - parseInt(last)) < 86400000) {
-    const h = Math.ceil((86400000 - (now - parseInt(last))) / 3600000);
-    alert('⏳ شما امروز گردونه را چرخانده‌اید! لطفاً ' + h + ' ساعت دیگر امتحان کنید (هر ۲۴ ساعت یک‌بار).');
-    return;
-  }
-
-  // انتخاب تصادفی هوشمند بر اساس وزن (شانس) خانه‌ها
-  let totalWeight = WHEEL_SEGS.reduce((sum, s) => sum + s.weight, 0);
-  let randomWeight = Math.random() * totalWeight;
-  let selectedIdx = 0;
-  let cumulative = 0;
-  
-  for (let i = 0; i < WHEEL_SEGS.length; i++) {
-    cumulative += WHEEL_SEGS[i].weight;
-    if (randomWeight <= cumulative) {
-      selectedIdx = i;
-      break;
-    }
-  }
-
-  const prize = WHEEL_SEGS[selectedIdx];
-  
-  // محاسبه زاویه چرخش گردونه (۸ خانه هر کدام ۴۵ درجه)
-  const degreesPerSeg = 360 / WHEEL_SEGS.length;
-  const targetDeg = wheelDeg + 1440 + (selectedIdx * degreesPerSeg) + (degreesPerSeg / 2);
-  wheelDeg = targetDeg;
-  
-  const wheelEl = document.getElementById('wheel-el');
-  if (wheelEl) wheelEl.style.transform = 'rotate(' + wheelDeg + 'deg)';
-
-  setTimeout(() => {
-    const st = Date.now().toString();
-    localStorage.setItem(sk, st);
-    currentUser.lastSpin = st;
-    
-    if (!currentUser.prizesList) currentUser.prizesList = [];
-    
-    if (prize.type === 'cash') {
-      currentUser.prizesList.push({ title: prize.label, date: new Date().toLocaleDateString('fa-IR') });
-      currentUser.points = (Number(currentUser.points) || 0) + (prize.value / 1000); // تبدیل به امتیاز معادل
-      alert('🎉 تبریک ' + currentUser.name + '! شما برنده ' + prize.label + ' شدید!
-✅ جایزه در حساب شما ذخیره شد و جمعه واریز می‌گردد.');
-    } else if (prize.type === 'special') {
-      currentUser.prizesList.push({ title: '🎁 جایزه ویژه کادو', date: new Date().toLocaleDateString('fa-IR') });
-      alert('🎁 وای! جایزه ویژه کادو را دیدید! (این یک جایزه نمایشی است)');
-    } else {
-      alert('❌ پوچ! متأسفانه این بار برنده نشدید. فردا دوباره شانس خود را امتحان کنید!');
-    }
-
-    if (typeof syncUserToCloud === 'function') syncUserToCloud();
-    if (typeof updateUserHeader === 'function') updateUserHeader();
-  }, 3100);
-}
-
-// به‌روزرسانی پنل پروفایل برای نمایش و ثبت کیف پول سولانا و اتریوم
-function openProfileModal() {
-  if (!currentUser || currentUser.type !== 'google') {
-    const authModal = document.getElementById('auth-modal');
-    if (authModal) authModal.classList.add('show');
-    return;
-  }
-  
-  const savedCount = savedDrops ? savedDrops.length : 0;
-  const userPrizes = currentUser.prizesList || [];
-  const solWallet = currentUser.solWallet || '';
-  const ethWallet = currentUser.ethWallet || '';
-
-  let prizesHtml = '';
-  if (userPrizes.length > 0) {
-    prizesHtml = '<div style="margin-bottom:14px;"><div style="font-size:13px; font-weight:800; margin-bottom:6px; color:#10b981;">🎁 جوایز برنده شده شما:</div>' + 
-      userPrizes.map(p => '<div style="font-size:11px; background:#0b0e14; padding:6px 10px; border-radius:8px; margin-bottom:4px; display:flex; justify-content:space-between;"><span>' + p.title + '</span><span style="color:var(--muted);">' + p.date + '</span></div>').join('') + 
-      '</div>';
-  } else {
-    prizesHtml = '<div style="font-size:11px; color:var(--muted); margin-bottom:14px; text-align:center;">هنوز جایزه‌ای از گردونه برنده نشده‌اید.</div>';
-  }
-
-  document.getElementById('modal-body').innerHTML =
-    '<div style="text-align:center;margin-bottom:16px;">' +
-      '<div style="width:60px;height:60px;border-radius:50%;background:#10b981;color:#fff;font-size:26px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;overflow:hidden;">' +
-        currentUser.name.charAt(0).toUpperCase() +
-      '</div>' +
-      '<div style="font-size:18px;font-weight:900;">' + currentUser.name + '</div>' +
-      '<div style="font-size:12px;color:var(--muted);direction:ltr;">' + currentUser.email + '</div>' +
-    '</div>' +
-    '<div style="background:#0b0e14;padding:14px;border-radius:16px;margin-bottom:16px;font-size:12px;line-height:2;">' +
-      '<div>🔐 <b>نوع حساب:</b> <span style="color:#10b981">حساب گوگل (متصل به ابر ☁️)</span></div>' +
-      '<div>🎁 <b>امتیاز کل:</b> <b style="color:#60a5fa">' + (currentUser.points || 0) + ' امتیاز</b></div>' +
-      '<div>⭐ <b>ایردراپ‌های ذخیره‌شده:</b> <b style="color:#eab308">' + savedCount + ' مورد</b></div>' +
-    '</div>' +
-    prizesHtml +
-    '<div style="background:#161b22; padding:12px; border-radius:14px; margin-bottom:16px;">' +
-      '<div style="font-size:12px; font-weight:800; margin-bottom:8px; color:#60a5fa;">💳 ثبت آدرس کیف پول برای واریز جوایز جمعه:</div>' +
-      '<div style="margin-bottom:8px;">' +
-        '<label style="font-size:10px; color:var(--muted);">آدرس کیف پول سولانا (Solana):</label>' +
-        '<input id="profile-sol-wallet" type="text" value="' + solWallet + '" placeholder="مثال: SolAddress..." style="width:100%; background:#0b0e14; border:1px solid #30363d; color:#fff; padding:8px; border-radius:8px; font-size:11px; direction:ltr; text-align:left; margin-top:3px;">' +
-      '</div>' +
-      '<div style="margin-bottom:10px;">' +
-        '<label style="font-size:10px; color:var(--muted);">آدرس کیف پول اتریوم (Ethereum / EVM):</label>' +
-        '<input id="profile-eth-wallet" type="text" value="' + ethWallet + '" placeholder="مثال: 0x..." style="width:100%; background:#0b0e14; border:1px solid #30363d; color:#fff; padding:8px; border-radius:8px; font-size:11px; direction:ltr; text-align:left; margin-top:3px;">' +
-      '</div>' +
-      '<button onclick="saveUserWallets()" style="width:100%; background:linear-gradient(90deg, #10b981, #059669); color:#fff; border:none; padding:8px; border-radius:8px; font-weight:bold; font-size:11px; cursor:pointer;">💾 ذخیره آدرس کیف پول‌ها</button>' +
-    '</div>' +
-    '<button onclick="switchAccount()" style="width:100%; background:#ef4444; color:#fff; border:none; padding:10px; border-radius:12px; font-weight:bold; font-size:12px; margin-bottom:8px; cursor:pointer;">🚪 خروج از حساب کاربری</button>' +
-    '<button onclick="closeModal()" style="width:100%; background:#222838; color:#fff; border:none; padding:10px; border-radius:12px; font-size:12px; cursor:pointer;">بستن</button>';
-  
-  const modal = document.getElementById('modal');
-  if (modal) modal.classList.add('show');
-}
-
-function saveUserWallets() {
-  const sol = document.getElementById('profile-sol-wallet').value.trim();
-  const eth = document.getElementById('profile-eth-wallet').value.trim();
-  
-  currentUser.solWallet = sol;
-  currentUser.ethWallet = eth;
-  
-  if (typeof saveToLocalVault === 'function') saveToLocalVault();
-  if (typeof syncUserToCloud === 'function') syncUserToCloud();
-  
-  alert('✅ آدرس کیف پول‌های شما با موفقیت ذخیره شد!');
-}
