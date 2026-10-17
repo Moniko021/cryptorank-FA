@@ -185,7 +185,7 @@ async function sendVerificationCode() {
     await emailjs.send(CR_EMAILJS_SERVICE, CR_EMAILJS_TEMPLATE, {
       to_name: name, name: name, from_name: 'CryptoRank FA', to_email: email, email: email,
       otp_code: crGeneratedOTP, code: crGeneratedOTP, title: 'کد تایید: ' + crGeneratedOTP,
-      message: 'کد تایید ورود شما به کریپتورنک: ' + crGeneratedOTP
+      message: 'کد تایید ورود شما به crypto4youFA: ' + crGeneratedOTP
     });
     document.getElementById('otp-step-1').style.display = 'none';
     document.getElementById('otp-step-2').style.display = 'block';
