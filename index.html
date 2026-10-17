@@ -60,11 +60,20 @@
       </div>
 
       <div id="google-form" class="google-form-box">
-        <div style="font-size:13px; font-weight:800; margin-bottom:10px; color:#60a5fa;">اتصال حساب گوگل (ذخیره برای ورودهای بعدی)</div>
-        <input id="g-name" class="inp" type="text" placeholder="نام و نام خانوادگی شما (مثلاً کوروش)">
-        <input id="g-email" class="inp" type="email" placeholder="آدرس جیمیل (example@gmail.com)" style="direction:ltr; text-align:left;">
-        <button onclick="submitGoogleLogin()" class="spin-btn" style="width:100%; margin-bottom:8px;">✅ ثبت و ورود دائمی</button>
-        <button onclick="hideGoogleForm()" style="width:100%; background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:6px;">بازگشت</button>
+        <div id="otp-step-1">
+          <div style="font-size:13px;font-weight:800;margin-bottom:10px;color:#60a5fa;">ورود با جیمیل (با کد تایید ۶ رقمی)</div>
+          <input id="g-name" class="inp" type="text" placeholder="نام شما (مثلاً کوروش)">
+          <input id="g-email" class="inp" type="email" placeholder="example@gmail.com" style="direction:ltr;text-align:left;">
+          <button id="send-otp-btn" onclick="sendVerificationCode()" class="spin-btn" style="width:100%;margin-bottom:8px;">📨 ارسال کد تایید به جیمیل</button>
+          <button onclick="hideGoogleForm()" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;padding:6px;">بازگشت</button>
+        </div>
+        <div id="otp-step-2" style="display:none;">
+          <div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#10b981;">✅ کد ۶ رقمی به جیمیل ارسال شد!</div>
+          <div id="otp-email-preview" style="font-size:11px;color:var(--muted);margin-bottom:10px;direction:ltr;text-align:center;"></div>
+          <input id="g-otp-code" class="inp" type="number" placeholder="کد ۶ رقمی را وارد کنید" style="direction:ltr;text-align:center;font-size:16px;font-weight:bold;">
+          <button onclick="verifyAndLogin()" class="spin-btn" style="width:100%;margin-bottom:8px;background:#10b981;">🔐 تایید کد و ورود</button>
+          <button onclick="resetOtpStep()" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;padding:6px;">✏️ ویرایش جیمیل</button>
+        </div>
       </div>
     </div>
   </div>
@@ -89,6 +98,10 @@
         <div class="story-ring"><div class="story-inner">🏠</div></div>
         <span class="story-title">صفحه اصلی</span>
       </button>
+      <button onclick="openPage('profile')" id="st-profile" class="story-item">
+        <div class="story-ring"><div class="story-inner">👤</div></div>
+        <span class="story-title">پروفایل من</span>
+      </button>
       <button onclick="openPage('news')" id="st-news" class="story-item">
         <div class="story-ring"><div class="story-inner">📰</div></div>
         <span class="story-title">اخبار آنی</span>
@@ -96,10 +109,6 @@
       <button onclick="openPage('drops')" id="st-drops" class="story-item">
         <div class="story-ring"><div class="story-inner">🪂</div></div>
         <span class="story-title">شکار ایردراپ</span>
-      </button>
-      <button onclick="openPage('funding')" id="st-funding" class="story-item">
-        <div class="story-ring"><div class="story-inner">🚀</div></div>
-        <span class="story-title">جذب سرمایه</span>
       </button>
       <button onclick="openPage('vcs')" id="st-vcs" class="story-item">
         <div class="story-ring"><div class="story-inner">🏛️</div></div>
@@ -146,14 +155,6 @@
           </div>
         </div>
 
-        <div class="feat-card feat-blue" onclick="openPage('funding')">
-          <div class="feat-icon">💼</div>
-          <div>
-            <div class="feat-h">جذب سرمایه‌ها</div>
-            <div class="feat-p">جدیدترین سرمایه‌گذاری‌های VC در کریپتو</div>
-          </div>
-        </div>
-
         <div class="feat-card feat-dark" onclick="openPage('drops')">
           <div class="feat-icon">🪂</div>
           <div>
@@ -195,7 +196,7 @@
           <div class="w-top"><span>دامیننس بیت‌کوین</span><span style="color:#3b82f6">۷ روزه</span></div>
           <div>
             <div class="dom-val" id="btc-dom">57.89%</div>
-            <div class="dom-chg">+1.17% ↗</div>
+            <div class="dom-chg" id="btc-dom-chg">زنده ↗</div>
           </div>
           <svg class="mini-chart" viewBox="0 0 100 35">
             <path d="M0,30 L15,25 L30,28 L45,18 L60,22 L75,10 L90,14 L100,5" fill="none" stroke="#10b981" stroke-width="2.5"/>
@@ -234,12 +235,19 @@
   <div id="page-news" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">📰 آخرین اخبار و تحلیل‌های آنی کریپتو</div></div><div id="news-list-container"></div></div>
   <div id="page-drops" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🪂 شکار ایردراپ‌ها (آنلاین)</div></div><div id="drops-list"></div></div>
   <div id="page-vcs" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🏛️ سرمایه‌گذاران برتر کریپتو</div></div><div id="vcs-list"></div></div>
-  <div id="page-funding" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🚀 جذب سرمایه‌های اخیر</div></div><div id="funding-list"></div></div>
   <div id="page-unlocks" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🔓 تقویم آزادسازی توکن‌ها</div></div><div id="unlocks-list"></div></div>
   <div id="page-converter" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">💱 مبدل لحظه‌ای ارزها</div></div><div class="info-card"><label style="font-size:12px; color:var(--muted);">مقدار ارز:</label><input type="number" id="c-amt" class="inp" value="1" oninput="calcConv()" style="margin-top:6px;"><label style="font-size:12px; color:var(--muted);">انتخاب ارز:</label><select id="c-sel" class="inp" onchange="calcConv()" style="margin-top:6px;"></select><div style="background:#0b0e14; padding:16px; border-radius:14px; text-align:center; margin-top:8px;"><div style="font-size:11px; color:var(--muted);">معادل دلاری:</div><div id="c-res" style="font-size:24px; font-weight:900; color:#10b981; direction:ltr; margin-top:4px;">$0.00</div></div></div></div>
 
+  <div id="page-profile" class="view-page"><div class="sec-wrap"><div id="profile-page-container"></div></div></div>
+
+  <footer id="cr-footer" style="margin:30px 14px 24px; padding:18px; background:#131722; border:1px solid #1e2433; border-radius:18px; text-align:center; font-size:12px; color:#94a3b8; line-height:1.8;">
+    <div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:6px;">crypto<span style="color:#3b82f6;">rank</span> FA</div>
+    <div style="margin-bottom:10px;">پلتفرم جامع رصد لحظه‌ای بازار کریپتو، شکار ایردراپ‌ها، بررسی صندوق‌های سرمایه‌گذاری (Tier 1-5) و گردونه جوایز هفتگی.</div>
+    <div style="font-size:10px;color:#64748b;">تمامی قیمت‌ها، اخبار و تقویم ۳۰ روزه آنلاک توکن‌ها به صورت خودکار و روزانه بروزرسانی می‌شوند. © 2026</div>
+  </footer>
+
   <div id="modal" class="modal" onclick="closeModal()"><div class="modal-box" onclick="event.stopPropagation()"><div id="modal-body"></div></div></div>
 
-  <script src="app.js?v=1000"></script>
+  <script src="app.js?v=1100"></script>
 </body>
 </html>

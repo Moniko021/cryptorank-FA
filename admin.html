@@ -7,10 +7,10 @@
   <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
   <link rel="stylesheet" href="style.css?v=112">
   <style>
-    .admin-container { max-width: 650px; margin: 24px auto; padding: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 24px; }
+    .admin-container { max-width: 680px; margin: 24px auto; padding: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 24px; }
     .admin-title { font-size: 19px; font-weight: 900; color: #60a5fa; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
-    .admin-tabs { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
-    .tab-btn { flex: 1; background: #0b0e14; color: var(--muted); border: 1px solid var(--border); padding: 10px; border-radius: 12px; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+    .admin-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn { flex: 1; background: #0b0e14; color: var(--muted); border: 1px solid var(--border); padding: 10px; border-radius: 12px; font-size: 12px; font-weight: 800; cursor: pointer; text-align: center; }
     .tab-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
     .admin-sec { display: none; }
     .admin-sec.active { display: block; }
@@ -21,10 +21,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="firebase-config.js"></script>
-<style>
-  /* مخفی کردن کامل تب‌های اخبار فوری و آنلاک توکن در پنل مدیریت */
-  button[onclick*="news"], button[onclick*="unlock"], .tab-btn:nth-child(2), .tab-btn:nth-child(3) { display: none !important; }
-</style>
 </head>
 <body>
 
@@ -42,53 +38,57 @@
 
     <div id="panel-box" style="display:none;">
       <div class="admin-tabs">
-        <button class="tab-btn active" id="tb-drops" onclick="switchTab('drops')">🪂 ایردراپ‌ها</button>
-        <button class="tab-btn" id="tb-news" onclick="switchTab('news')">📰 اخبار فوری</button>
-        <button class="tab-btn" id="tb-unlocks" onclick="switchTab('unlocks')">🔓 آنلاک توکن</button>
+        <button class="tab-btn active" id="tb-drops" onclick="switchTab('drops')">🪂 مدیریت ایردراپ‌ها</button>
+        <button class="tab-btn" id="tb-tasks" onclick="switchTab('tasks')">🎯 تسک‌های نقدی</button>
       </div>
 
-      <!-- بخش ایردراپ -->
+      <!-- بخش ایردراپ‌ها -->
       <div id="sec-drops" class="admin-sec active">
         <div style="background:#0b0e14; padding:16px; border-radius:18px; margin-bottom:18px;">
           <h3 style="font-size:14px; font-weight:900; margin-bottom:12px; color:#10b981;">+ افزودن ایردراپ جدید</h3>
-          <input id="n-name" class="inp" placeholder="نام پروژه (مثلاً Blum)">
-          <input id="n-task" class="inp" placeholder="توضیح تسک‌ها و مراحل شرکت">
-          <input id="n-vc" class="inp" placeholder="سرمایه‌گذاران (مثلاً Binance Labs)">
-          <input id="n-raised" class="inp" placeholder="مبلغ سرمایه جذب‌شده (مثلاً $30M)">
-          <input id="n-chain" class="inp" placeholder="شبکه (مثلاً TON / Ethereum / Testnet)">
-          <input id="n-link" class="inp" placeholder="لینک ورود یا رفرال (https://...)" style="direction:ltr; text-align:left;">
+          <input id="n-name" class="inp" placeholder="نام پروژه (مثلاً Monad)">
+          <input id="n-task" class="inp" placeholder="توضیح کوتاه تسک‌ها">
+          <input id="n-vc" class="inp" placeholder="سرمایه‌گذاران (مثلاً Paradigm)">
+          <input id="n-raised" class="inp" placeholder="مبلغ سرمایه (مثلاً $225M)">
+          <input id="n-chain" class="inp" placeholder="شبکه (مثلاً Monad Testnet)">
+          <select id="n-cost" class="inp">
+            <option value="رایگان">🆓 کاملاً رایگان</option>
+            <option value="نیازمند سرمایه">💰 نیازمند سرمایه</option>
+          </select>
+          <select id="n-urgent" class="inp">
+            <option value="false">⏳ وضعیت عادی (فعال)</option>
+            <option value="true">🔥 نزدیک به پایان (فوری)</option>
+          </select>
+          <input id="n-link" class="inp" placeholder="لینک ورود مستقیم (https://...)" style="direction:ltr; text-align:left;">
           <button onclick="saveNewDropCloud()" class="spin-btn" style="width:100%;">انتشار آنی ایردراپ</button>
         </div>
-        <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست ایردراپ‌های فعال:</div>
+        <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست ایردراپ‌های فعال روی ابر:</div>
         <div id="admin-drops-list"></div>
       </div>
 
-      <!-- بخش اخبار -->
-      <div id="sec-news" class="admin-sec">
+      <!-- بخش تسک‌های نقدی -->
+      <div id="sec-tasks" class="admin-sec">
         <div style="background:#0b0e14; padding:16px; border-radius:18px; margin-bottom:18px;">
-          <h3 style="font-size:14px; font-weight:900; margin-bottom:12px; color:#3b82f6;">+ انتشار خبر فوری جدید</h3>
-          <input id="nw-title" class="inp" placeholder="تیتر خبر...">
-          <input id="nw-source" class="inp" placeholder="منبع خبر (مثلاً CoinDesk یا کریپتورنک)">
-          <textarea id="nw-desc" class="inp" rows="3" placeholder="متن کامل و توضیحات خبر..."></textarea>
-          <button onclick="saveNewNewsCloud()" class="spin-btn" style="width:100%;">انتشار آنی خبر</button>
+          <h3 style="font-size:14px; font-weight:900; margin-bottom:12px; color:#3b82f6;">+ تعریف تسک پاداش نقدی جدید</h3>
+          <input id="t-title" class="inp" placeholder="عنوان تسک (مثلاً عضویت در کانال تلگرام)">
+          <input id="t-reward" class="inp" type="number" placeholder="مبلغ پاداش به تومان (مثلاً 10000)">
+          <input id="t-link" class="inp" placeholder="لینک تسک (https://...)" style="direction:ltr; text-align:left;">
+          <button onclick="saveNewTaskCloud()" class="spin-btn" style="width:100%;">ثبت تسک جدید</button>
         </div>
-        <div style="font-size:13px; font-weight:900; margin-bottom:10px;">اخبار منتشرشده روی ابر:</div>
-        <div id="admin-news-list"></div>
+        <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست تسک‌های فعال:</div>
+        <div id="admin-tasks-list"></div>
       </div>
 
-      <!-- بخش آنلاک توکن -->
-      <div id="sec-unlocks" class="admin-sec">
-        <div style="background:#0b0e14; padding:16px; border-radius:18px; margin-bottom:18px;">
-          <h3 style="font-size:14px; font-weight:900; margin-bottom:12px; color:#fb7185;">+ افزودن رویداد آنلاک توکن</h3>
-          <input id="un-name" class="inp" placeholder="نام و نماد ارز (مثلاً Arbitrum - ARB)">
-          <input id="un-amt" class="inp" placeholder="تعداد توکن آزادشونده (مثلاً 92.6M ARB)">
-          <input id="un-val" class="inp" placeholder="ارزش دلاری (مثلاً $55.4M)">
-          <input id="un-time" class="inp" placeholder="زمان آزادسازی (مثلاً ۳ روز دیگر یا ۲۵ آبان)">
-          <button onclick="saveNewUnlockCloud()" class="spin-btn" style="width:100%;">ثبت آنلاک توکن</button>
+      <!-- بخش کاربران و کیف پول‌ها -->
+      <div class="card" style="border:1px solid #10b981; margin-top:24px; background:#131722; padding:16px; border-radius:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h3 style="margin:0; color:#10b981; font-size:15px;">👥 لیست کاربران، جوایز گردونه و کیف پول‌ها</h3>
+          <button onclick="loadAdminUsers()" style="background:#3b82f6; color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">🔄 بروزرسانی</button>
         </div>
-        <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست آنلاک‌های ثبت‌شده:</div>
-        <div id="admin-unlocks-list"></div>
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:12px; line-height:1.6;">لیست کاربران جیمیل، موجودی جوایز و آدرس کیف پول سولانا/اتریوم برای واریزهای جمعه:</div>
+        <div id="users-admin-list" style="font-size:12px; color:#cbd5e1;"></div>
       </div>
+
     </div>
   </div>
 
@@ -105,7 +105,7 @@
     }
 
     function switchTab(tab) {
-      ['drops', 'news', 'unlocks'].forEach(t => {
+      ['drops', 'tasks'].forEach(t => {
         document.getElementById('tb-' + t).classList.remove('active');
         document.getElementById('sec-' + t).classList.remove('active');
       });
@@ -115,8 +115,8 @@
 
     function loadAllAdminData() {
       loadCloudDropsAdmin();
-      loadCloudNewsAdmin();
-      loadCloudUnlocksAdmin();
+      loadCloudTasksAdmin();
+      loadAdminUsers();
     }
 
     function loadCloudDropsAdmin() {
@@ -129,7 +129,7 @@
         let html = '';
         snap.forEach((doc) => {
           let d = doc.data();
-          html += `<div class="item-row"><div><div style="font-weight:900; font-size:14px;">🪂 ${d.name}</div><div style="font-size:11px; color:var(--muted);">${d.task}</div></div><button onclick="deleteDoc('drops','${doc.id}')" class="del-btn">حذف</button></div>`;
+          html += `<div class="item-row"><div><div style="font-weight:900; font-size:14px;">🪂 ${d.name}</div><div style="font-size:11px; color:var(--muted);">${d.chain} | ${d.cost}</div></div><button onclick="deleteDoc('drops','${doc.id}')" class="del-btn">حذف</button></div>`;
         });
         container.innerHTML = html;
       });
@@ -141,77 +141,49 @@
       db.collection("drops").add({
         id: Date.now(),
         name: name,
-        task: document.getElementById('n-task').value.trim() || 'تسک‌های روزانه و تست‌نت',
+        task: document.getElementById('n-task').value.trim() || 'تسک‌های کمپین',
         vc: document.getElementById('n-vc').value.trim() || 'نامشخص',
         raised: document.getElementById('n-raised').value.trim() || 'نامشخص',
         chain: document.getElementById('n-chain').value.trim() || 'Multi-Chain',
+        cost: document.getElementById('n-cost').value,
+        urgent: document.getElementById('n-urgent').value === 'true',
         link: document.getElementById('n-link').value.trim() || 'https://t.me/',
-        cost: "رایگان", reward: "ایردراپ قطعی"
+        updatedAt: new Date().toLocaleDateString('fa-IR')
       }).then(() => {
         alert('✅ ایردراپ با موفقیت منتشر شد!');
         ['n-name','n-task','n-vc','n-raised','n-chain','n-link'].forEach(id => document.getElementById(id).value = '');
       });
     }
 
-    function loadCloudNewsAdmin() {
-      db.collection("news").onSnapshot((snap) => {
-        const container = document.getElementById('admin-news-list');
+    function loadCloudTasksAdmin() {
+      if (typeof db === 'undefined') return;
+      db.collection("tasks").onSnapshot((snap) => {
+        const container = document.getElementById('admin-tasks-list');
         if (snap.empty) {
-          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هنوز خبر سفارشی ثبت نشده است.</div>';
+          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ تسکی ثبت نشده است.</div>';
           return;
         }
         let html = '';
         snap.forEach((doc) => {
-          let n = doc.data();
-          html += `<div class="item-row"><div><div style="font-weight:900; font-size:13px;">📰 ${n.title}</div><div style="font-size:11px; color:var(--muted);">${n.source}</div></div><button onclick="deleteDoc('news','${doc.id}')" class="del-btn">حذف</button></div>`;
+          let t = doc.data();
+          html += `<div class="item-row"><div><div style="font-weight:900; font-size:13px;">🎯 ${t.title}</div><div style="font-size:11px; color:#10b981;">پاداش: ${Number(t.reward).toLocaleString('fa-IR')} تومان</div></div><button onclick="deleteDoc('tasks','${doc.id}')" class="del-btn">حذف</button></div>`;
         });
         container.innerHTML = html;
       });
     }
 
-    function saveNewNewsCloud() {
-      const title = document.getElementById('nw-title').value.trim();
-      if (!title) return alert('تیتر خبر را وارد کنید.');
-      db.collection("news").add({
+    function saveNewTaskCloud() {
+      const title = document.getElementById('t-title').value.trim();
+      const reward = document.getElementById('t-reward').value.trim();
+      if (!title || !reward) return alert('عنوان و مبلغ پاداش را وارد کنید.');
+      db.collection("tasks").add({
         id: Date.now(),
         title: title,
-        source: document.getElementById('nw-source').value.trim() || 'کریپتورنک',
-        desc: document.getElementById('nw-desc').value.trim() || title,
-        time: new Date().toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})
+        reward: Number(reward),
+        link: document.getElementById('t-link').value.trim() || '#'
       }).then(() => {
-        alert('✅ خبر فوری در سایت منتشر شد!');
-        ['nw-title','nw-source','nw-desc'].forEach(id => document.getElementById(id).value = '');
-      });
-    }
-
-    function loadCloudUnlocksAdmin() {
-      db.collection("unlocks").onSnapshot((snap) => {
-        const container = document.getElementById('admin-unlocks-list');
-        if (snap.empty) {
-          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هنوز رویداد آنلاکی ثبت نشده است.</div>';
-          return;
-        }
-        let html = '';
-        snap.forEach((doc) => {
-          let u = doc.data();
-          html += `<div class="item-row"><div><div style="font-weight:900; font-size:13px;">🔓 ${u.name}</div><div style="font-size:11px; color:var(--muted);">${u.amt} (${u.val}) - ${u.time}</div></div><button onclick="deleteDoc('unlocks','${doc.id}')" class="del-btn">حذف</button></div>`;
-        });
-        container.innerHTML = html;
-      });
-    }
-
-    function saveNewUnlockCloud() {
-      const name = document.getElementById('un-name').value.trim();
-      if (!name) return alert('نام ارز را وارد کنید.');
-      db.collection("unlocks").add({
-        id: Date.now(),
-        name: name,
-        amt: document.getElementById('un-amt').value.trim() || 'نامشخص',
-        val: document.getElementById('un-val').value.trim() || '$10M+',
-        time: document.getElementById('un-time').value.trim() || 'به‌زودی'
-      }).then(() => {
-        alert('✅ رویداد آنلاک توکن ثبت شد!');
-        ['un-name','un-amt','un-val','un-time'].forEach(id => document.getElementById(id).value = '');
+        alert('✅ تسک جدید ثبت شد!');
+        ['t-title','t-reward','t-link'].forEach(id => document.getElementById(id).value = '');
       });
     }
 
@@ -219,203 +191,131 @@
       if (!confirm('آیا از حذف این مورد مطمئن هستید؟')) return;
       db.collection(col).doc(docId).delete();
     }
-  </script>
 
-<script>
-function injectSecureUsersPanel() {
-  // پیدا کردن پنل داخلی ادمین (که تا قبل از زدن رمز مخفی است)
-  var adminContent = document.getElementById('admin-panel') || document.getElementById('main-panel') || document.getElementById('panel-box') || document.getElementById('dashboard');
-  
-  if (!adminContent) {
-    // اگر آیدی متفاوت بود، دیویژنی که بعد از لاگین نمایش داده می‌شود (دارای display:none اولیه) را پیدا کن
-    var divs = document.querySelectorAll('div');
-    for (var i = 0; i < divs.length; i++) {
-      if (divs[i].innerHTML.includes('افزودن ایردراپ') || divs[i].innerHTML.includes('ثبت خبر') || divs[i].style.display === 'none') {
-        if (!divs[i].innerHTML.includes('رمز عبور امنیتی مدیریت')) {
-          adminContent = divs[i];
-          break;
-        }
-      }
-    }
-  }
-
-  if (adminContent && !document.getElementById('users-admin-card')) {
-    var card = document.createElement('div');
-    card.id = 'users-admin-card';
-    card.className = 'card';
-    card.style.cssText = 'border:1px solid #10b981; margin-top:18px; background:#131722; padding:16px; border-radius:16px;';
-    card.innerHTML =
-      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">' +
-        '<h3 style="margin:0; color:#10b981; font-size:15px;">👥 لیست کاربران، جوایز گردونه و کیف پول‌ها</h3>' +
-        '<button onclick="loadAdminUsers()" style="background:#3b82f6; color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">🔄 بروزرسانی</button>' +
-      '</div>' +
-      '<div style="font-size:11px; color:#94a3b8; margin-bottom:12px; line-height:1.6;">' +
-        'این بخش محرمانه و مخصوص مدیر است. لیست کاربران، جوایز برنده شده و آدرس کیف پول سولانا/اتریوم برای واریزهای روز جمعه:' +
-      '</div>' +
-      '<div id="users-admin-list" style="font-size:12px; color:#cbd5e1;"></div>';
-    adminContent.appendChild(card);
-  }
-}
-
-function copyWalletText(txt) {
-  if (!txt) return alert('آدرسی ثبت نشده است!');
-  navigator.clipboard.writeText(txt).then(function() {
-    alert('✅ آدرس کیف پول کپی شد:\n' + txt);
-  }).catch(function() {
-    prompt('آدرس را کپی کنید:', txt);
-  });
-}
-
-function markUserPaid(docId, email, currentBal) {
-  if (!confirm('آیا جایزه (' + Number(currentBal).toLocaleString('fa-IR') + ' تومان) برای ' + email + ' واریز شد و موجودی او صفر شود؟')) return;
-  
-  // صفر کردن در حافظه محلی در صورت وجود
-  var vKey = 'cr_vault_' + docId;
-  var lv = localStorage.getItem(vKey);
-  if (lv) {
-    try {
-      var vd = JSON.parse(lv);
-      vd.balanceToman = 0;
-      vd.prizesList = [{ title: '✅ تسویه حساب هفتگی انجام شد', amount: 0, date: new Date().toLocaleDateString('fa-IR') }];
-      localStorage.setItem(vKey, JSON.stringify(vd));
-    } catch(e){}
-  }
-
-  if (typeof db !== 'undefined') {
-    db.collection("users").doc(docId).set({
-      balanceToman: 0,
-      prizesList: [{ title: '✅ تسویه حساب هفتگی انجام شد', amount: 0, date: new Date().toLocaleDateString('fa-IR') }]
-    }, { merge: true }).then(function() {
-      alert('✅ موجودی کاربر صفر شد!');
-      loadAdminUsers();
-    }).catch(function() {
-      alert('✅ در حافظه بروزرسانی شد!');
-      loadAdminUsers();
-    });
-  } else {
-    loadAdminUsers();
-  }
-}
-
-function renderUsersHtml(list) {
-  var box = document.getElementById('users-admin-list');
-  if (!box) return;
-  if (!list || list.length === 0) {
-    box.innerHTML = '<div style="text-align:center; padding:14px; background:#0b0e14; border-radius:10px; color:#94a3b8;">هنوز هیچ کاربری با جیمیل ثبت‌نام نکرده است.</div>';
-    return;
-  }
-  list.sort(function(a, b) { return (Number(b.balanceToman) || 0) - (Number(a.balanceToman) || 0); });
-
-  box.innerHTML = list.map(function(u) {
-    var bal = Number(u.balanceToman) || 0;
-    var sol = u.solWallet || '';
-    var eth = u.ethWallet || '';
-    var prizes = Array.isArray(u.prizesList) ? u.prizesList : [];
-    var prizesTxt = prizes.length > 0
-      ? prizes.map(function(p) { return '<span style="display:inline-block; background:#1e293b; color:#10b981; padding:3px 8px; border-radius:6px; margin:2px; font-size:10px;">🎁 ' + p.title + ' (' + (p.date||'') + ')</span>'; }).join('')
-      : '<span style="color:#64748b; font-size:11px;">هنوز جایزه‌ای نبرده</span>';
-
-    return '<div style="background:#0b0e14; border:1px solid #1e2433; border-radius:12px; padding:12px; margin-bottom:10px;">' +
-      '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2433; padding-bottom:8px; margin-bottom:8px;">' +
-        '<div>' +
-          '<div style="font-weight:900; font-size:14px; color:#fff;">👤 ' + (u.name || 'کاربر') + '</div>' +
-          '<div style="font-size:11px; color:#60a5fa; direction:ltr; text-align:right;">' + (u.email || u.docId) + '</div>' +
-        '</div>' +
-        '<div style="text-align:left;">' +
-          '<div style="font-size:10px; color:#94a3b8;">موجودی جایزه:</div>' +
-          '<div style="font-size:15px; font-weight:900; color:' + (bal > 0 ? '#10b981' : '#64748b') + ';">' + bal.toLocaleString('fa-IR') + ' تومان</div>' +
-        '</div>' +
-      '</div>' +
-      '<div style="margin-bottom:8px; line-height:1.8;">' +
-        '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px; margin-bottom:4px;">' +
-          '<span style="font-size:11px; color:#a855f7;">🟣 سولانا: <b style="color:#fff; direction:ltr; display:inline-block;">' + (sol ? sol.substring(0,16)+'...' : 'ثبت نشده') + '</b></span>' +
-          (sol ? '<button onclick="copyWalletText(\'' + sol + '\')" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
-        '</div>' +
-        '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px;">' +
-          '<span style="font-size:11px; color:#3b82f6;">🔵 اتریوم: <b style="color:#fff; direction:ltr; display:inline-block;">' + (eth ? eth.substring(0,16)+'...' : 'ثبت نشده') + '</b></span>' +
-          (eth ? '<button onclick="copyWalletText(\'' + eth + '\')" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
-        '</div>' +
-      '</div>' +
-      '<div style="margin-bottom:8px;"><span style="font-size:11px; color:#94a3b8;">🏆 جوایز: </span>' + prizesTxt + '</div>' +
-      (bal > 0 ? '<button onclick="markUserPaid(\'' + u.docId + '\', \'' + (u.email||'') + '\', ' + bal + ')" style="width:100%; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-weight:bold; font-size:11px; cursor:pointer;">✅ تسویه شد (صفر کردن موجودی)</button>' : '') +
-    '</div>';
-  }).join('');
-}
-
-function getLocalVaultUsers() {
-  var map = {};
-  for (var i = 0; i < localStorage.length; i++) {
-    var k = localStorage.key(i);
-    if (k && k.indexOf('cr_vault_') === 0) {
-      try {
-        var d = JSON.parse(localStorage.getItem(k));
-        if (d && d.email) {
-          var docId = k.replace('cr_vault_', '');
-          map[docId] = Object.assign({ docId: docId }, d);
-        }
-      } catch(e){}
-    }
-  }
-  return map;
-}
-
-function loadAdminUsers() {
-  injectSecureUsersPanel();
-  var box = document.getElementById('users-admin-list');
-  if (!box) return;
-
-  // ۱. نمایش فوری کاربران ذخیره‌شده تا هرگز روی «در حال بارگذاری» گیر نکند
-  var userMap = getLocalVaultUsers();
-  var initialList = Object.keys(userMap).map(function(k) { return userMap[k]; });
-  if (initialList.length > 0) {
-    renderUsersHtml(initialList);
-  } else {
-    box.innerHTML = '<div style="color:#eab308; padding:10px;">⏳ در حال دریافت لیست کاربران از سرور...</div>';
-  }
-
-  // ۲. دریافت از دیتابیس ابری فایربیس و ترکیب با اطلاعات موجود
-  if (typeof db !== 'undefined') {
-    var done = false;
-    var timer = setTimeout(function() {
-      if (!done && initialList.length === 0) {
-        renderUsersHtml([]);
-      }
-    }, 3500);
-
-    db.collection("users").get().then(function(snap) {
-      done = true;
-      clearTimeout(timer);
-      snap.forEach(function(doc) {
-        var cd = doc.data();
-        var prev = userMap[doc.id] || {};
-        userMap[doc.id] = {
-          docId: doc.id,
-          name: cd.name || prev.name || 'کاربر',
-          email: cd.email || prev.email || doc.id,
-          balanceToman: Math.max(Number(cd.balanceToman)||0, Number(prev.balanceToman)||0),
-          solWallet: cd.solWallet || prev.solWallet || '',
-          ethWallet: cd.ethWallet || prev.ethWallet || '',
-          prizesList: (Array.isArray(cd.prizesList) && cd.prizesList.length >= (prev.prizesList||[]).length) ? cd.prizesList : (prev.prizesList || [])
-        };
+    // بخش مدیریت کاربران و کیف پول‌ها
+    function copyWalletText(txt) {
+      if (!txt) return alert('آدرسی ثبت نشده است!');
+      navigator.clipboard.writeText(txt).then(function() {
+        alert('✅ آدرس کیف پول کپی شد:
+' + txt);
+      }).catch(function() {
+        prompt('آدرس را کپی کنید:', txt);
       });
-      var finalList = Object.keys(userMap).map(function(k) { return userMap[k]; });
-      renderUsersHtml(finalList);
-    }).catch(function() {
-      done = true;
-      clearTimeout(timer);
-      renderUsersHtml(initialList);
-    });
-  } else {
-    renderUsersHtml(initialList);
-  }
-}
+    }
 
-window.addEventListener('DOMContentLoaded', function() {
-  injectSecureUsersPanel();
-  loadAdminUsers();
-});
-setTimeout(function() { injectSecureUsersPanel(); loadAdminUsers(); }, 800);
-</script>
+    function markUserPaid(docId, email, currentBal) {
+      if (!confirm('آیا جایزه (' + Number(currentBal).toLocaleString('fa-IR') + ' تومان) برای ' + email + ' واریز شد و موجودی او صفر شود؟')) return;
+      var vKey = 'cr_vault_' + docId;
+      var lv = localStorage.getItem(vKey);
+      if (lv) {
+        try {
+          var vd = JSON.parse(lv);
+          vd.balanceToman = 0;
+          vd.prizesList = [{ title: '✅ تسویه حساب هفتگی انجام شد', amount: 0, date: new Date().toLocaleDateString('fa-IR') }];
+          localStorage.setItem(vKey, JSON.stringify(vd));
+        } catch(e){}
+      }
+      if (typeof db !== 'undefined') {
+        db.collection("users").doc(docId).set({
+          balanceToman: 0,
+          prizesList: [{ title: '✅ تسویه حساب هفتگی انجام شد', amount: 0, date: new Date().toLocaleDateString('fa-IR') }]
+        }, { merge: true }).then(function() {
+          alert('✅ موجودی کاربر صفر شد!');
+          loadAdminUsers();
+        }).catch(function() { loadAdminUsers(); });
+      } else { loadAdminUsers(); }
+    }
+
+    function renderUsersHtml(list) {
+      var box = document.getElementById('users-admin-list');
+      if (!box) return;
+      if (!list || list.length === 0) {
+        box.innerHTML = '<div style="text-align:center; padding:14px; background:#0b0e14; border-radius:10px; color:#94a3b8;">هنوز هیچ کاربری با جیمیل ثبت‌نام نکرده است.</div>';
+        return;
+      }
+      list.sort(function(a, b) { return (Number(b.balanceToman) || 0) - (Number(a.balanceToman) || 0); });
+
+      box.innerHTML = list.map(function(u) {
+        var bal = Number(u.balanceToman) || 0;
+        var sol = u.solWallet || '';
+        var eth = u.ethWallet || '';
+        var prizes = Array.isArray(u.prizesList) ? u.prizesList : [];
+        var prizesTxt = prizes.length > 0
+          ? prizes.map(function(p) { return '<span style="display:inline-block; background:#1e293b; color:#10b981; padding:3px 8px; border-radius:6px; margin:2px; font-size:10px;">🎁 ' + p.title + ' (' + (p.date||'') + ')</span>'; }).join('')
+          : '<span style="color:#64748b; font-size:11px;">هنوز جایزه‌ای نبرده</span>';
+
+        return '<div style="background:#0b0e14; border:1px solid #1e2433; border-radius:12px; padding:12px; margin-bottom:10px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2433; padding-bottom:8px; margin-bottom:8px;">' +
+            '<div>' +
+              '<div style="font-weight:900; font-size:14px; color:#fff;">👤 ' + (u.name || 'کاربر') + '</div>' +
+              '<div style="font-size:11px; color:#60a5fa; direction:ltr; text-align:right;">' + (u.email || u.docId) + '</div>' +
+            '</div>' +
+            '<div style="text-align:left;">' +
+              '<div style="font-size:10px; color:#94a3b8;">موجودی جایزه:</div>' +
+              '<div style="font-size:15px; font-weight:900; color:' + (bal > 0 ? '#10b981' : '#64748b') + ';">' + bal.toLocaleString('fa-IR') + ' تومان</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-bottom:8px; line-height:1.8;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px; margin-bottom:4px;">' +
+              '<span style="font-size:11px; color:#a855f7;">🟣 سولانا: <b style="color:#fff; direction:ltr; display:inline-block;">' + (sol ? sol.substring(0,16)+'...' : 'ثبت نشده') + '</b></span>' +
+              (sol ? '<button onclick="copyWalletText('' + sol + '')" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
+            '</div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px;">' +
+              '<span style="font-size:11px; color:#3b82f6;">🔵 اتریوم: <b style="color:#fff; direction:ltr; display:inline-block;">' + (eth ? eth.substring(0,16)+'...' : 'ثبت نشده') + '</b></span>' +
+              (eth ? '<button onclick="copyWalletText('' + eth + '')" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-bottom:8px;"><span style="font-size:11px; color:#94a3b8;">🏆 جوایز: </span>' + prizesTxt + '</div>' +
+          (bal > 0 ? '<button onclick="markUserPaid('' + u.docId + '', '' + (u.email||'') + '', ' + bal + ')" style="width:100%; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-weight:bold; font-size:11px; cursor:pointer;">✅ تسویه شد (صفر کردن موجودی)</button>' : '') +
+        '</div>';
+      }).join('');
+    }
+
+    function getLocalVaultUsers() {
+      var map = {};
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('cr_vault_') === 0) {
+          try {
+            var d = JSON.parse(localStorage.getItem(k));
+            if (d && d.email) {
+              var docId = k.replace('cr_vault_', '');
+              map[docId] = Object.assign({ docId: docId }, d);
+            }
+          } catch(e){}
+        }
+      }
+      return map;
+    }
+
+    function loadAdminUsers() {
+      var box = document.getElementById('users-admin-list');
+      if (!box) return;
+      var userMap = getLocalVaultUsers();
+      var initialList = Object.keys(userMap).map(function(k) { return userMap[k]; });
+      if (initialList.length > 0) renderUsersHtml(initialList);
+      else box.innerHTML = '<div style="color:#eab308; padding:10px;">⏳ در حال دریافت لیست کاربران...</div>';
+
+      if (typeof db !== 'undefined') {
+        db.collection("users").get().then(function(snap) {
+          snap.forEach(function(doc) {
+            var cd = doc.data();
+            var prev = userMap[doc.id] || {};
+            userMap[doc.id] = {
+              docId: doc.id,
+              name: cd.name || prev.name || 'کاربر',
+              email: cd.email || prev.email || doc.id,
+              balanceToman: Math.max(Number(cd.balanceToman)||0, Number(prev.balanceToman)||0),
+              solWallet: cd.solWallet || prev.solWallet || '',
+              ethWallet: cd.ethWallet || prev.ethWallet || '',
+              prizesList: (Array.isArray(cd.prizesList) && cd.prizesList.length >= (prev.prizesList||[]).length) ? cd.prizesList : (prev.prizesList || [])
+            };
+          });
+          renderUsersHtml(Object.keys(userMap).map(function(k) { return userMap[k]; }));
+        }).catch(function() { renderUsersHtml(initialList); });
+      }
+    }
+  </script>
 
 </body>
 </html>
