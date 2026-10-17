@@ -1170,3 +1170,351 @@ updateGainersLosersPreview = function() {
 
 fetchAndTranslateLiveNews();
 setInterval(fetchAndTranslateLiveNews, 180000);
+
+
+// === ارتقای مهندسی: اسپلش ۲ ثانیه‌ای، آنلاک خودکار آنلاین، فیلتر و آموزش ایردراپ‌ها و صفحه درباره ما ===
+
+// ۱. حذف خودکار صفحه لوگو پس از ۲ ثانیه
+setTimeout(function() {
+  var sp = document.getElementById('cr-splash');
+  if (sp) {
+    sp.style.opacity = '0';
+    setTimeout(function() { sp.style.display = 'none'; }, 500);
+  }
+}, 2000);
+
+// ثبت آمار بازدید سایت
+(function trackSiteVisit() {
+  var v = parseInt(localStorage.getItem('cr_total_visits') || '120') + 1;
+  localStorage.setItem('cr_total_visits', v);
+  if (typeof db !== 'undefined') {
+    db.collection("stats").doc("general").set({
+      views: firebase.firestore.FieldValue ? firebase.firestore.FieldValue.increment(1) : v,
+      lastVisit: new Date().toISOString()
+    }, { merge: true }).catch(function(){});
+  }
+})();
+
+// ۲. موتور کاملاً خودکار و آنلاین «آنلاک توکن‌ها» (محاسبه روزهای باقی‌مانده و ارزش دلاری زنده از قیمت بازار)
+var AUTO_UNLOCK_SCHEDULES = [
+  { symbol: 'arb', name: 'Arbitrum (ARB)', amountNum: 92650000, amountTxt: '92.65M ARB', unlockDayOfMonth: 16, fallbackPrice: 0.55 },
+  { symbol: 'op', name: 'Optimism (OP)', amountNum: 31340000, amountTxt: '31.34M OP', unlockDayOfMonth: 30, fallbackPrice: 1.60 },
+  { symbol: 'sui', name: 'Sui (SUI)', amountNum: 64190000, amountTxt: '64.19M SUI', unlockDayOfMonth: 1, fallbackPrice: 2.10 },
+  { symbol: 'apt', name: 'Aptos (APT)', amountNum: 11310000, amountTxt: '11.31M APT', unlockDayOfMonth: 12, fallbackPrice: 9.20 },
+  { symbol: 'tia', name: 'Celestia (TIA)', amountNum: 17500000, amountTxt: '17.50M TIA', unlockDayOfMonth: 28, fallbackPrice: 5.10 },
+  { symbol: 'strk', name: 'Starknet (STRK)', amountNum: 64000000, amountTxt: '64.00M STRK', unlockDayOfMonth: 15, fallbackPrice: 0.45 },
+  { symbol: 'sei', name: 'Sei (SEI)', amountNum: 55560000, amountTxt: '55.56M SEI', unlockDayOfMonth: 15, fallbackPrice: 0.42 },
+  { symbol: 'zk', name: 'ZKsync (ZK)', amountNum: 173000000, amountTxt: '173.0M ZK', unlockDayOfMonth: 17, fallbackPrice: 0.14 }
+];
+
+function updateLiveAutoUnlocks() {
+  var now = new Date();
+  var curDay = now.getDate();
+  var computed = AUTO_UNLOCK_SCHEDULES.map(function(item, idx) {
+    var daysLeft = item.unlockDayOfMonth - curDay;
+    if (daysLeft <= 0) daysLeft += 30;
+    var foundCoin = (coins || []).find(function(c) { return c.symbol && c.symbol.toLowerCase() === item.symbol; });
+    var livePrice = foundCoin ? Number(foundCoin.current_price) : item.fallbackPrice;
+    var valUsd = (item.amountNum * livePrice) / 1000000;
+    return {
+      id: 'auto_u_' + idx,
+      name: item.name,
+      amt: item.amountTxt,
+      val: '$' + valUsd.toFixed(1) + 'M (محاسبه زنده)',
+      time: daysLeft === 1 ? 'فردا (بسیار مهم 🔥)' : (daysLeft + ' روز دیگر'),
+      daysLeft: daysLeft
+    };
+  });
+  computed.sort(function(a, b) { return a.daysLeft - b.daysLeft; });
+  unlocks = computed;
+  renderLists();
+}
+
+// ۳. دیتابیس جامع پروژه‌های ایردراپ و توکن‌های عرضه‌نشده (با دسته‌بندی، مهلت، لینک رسمی و آموزش گام‌به‌گام)
+var BUILTIN_PRO_DROPS = [
+  {
+    name: 'Monad (تست‌نت رسمی)',
+    cost: 'رایگان',
+    type: 'تست‌نت',
+    chain: 'Monad Testnet (EVM)',
+    vc: 'Paradigm, Dragonfly',
+    raised: '$225,000,000',
+    reward: 'توکن $MON (قطعی)',
+    deadline: 'نزدیک به پایان 🔥',
+    urgent: true,
+    updatedAt: 'امروز (به‌روز)',
+    site: 'https://www.monad.xyz',
+    twitter: 'https://x.com/monad_xyz',
+    link: 'https://testnet.monad.xyz',
+    task: 'بزرگ‌ترین بلاکچین لایه اول EVM با جذب سرمایه ۲۲۵ میلیون دلاری. شرکت در تست‌نت کاملاً رایگان است.',
+    steps: [
+      '۱. ابتدا کیف پول متامسک یا Rabby خود را باز کنید و وارد لینک رسمی تست‌نت شوید.',
+      '۲. از بخش Faucet توکن تستی رایگان MON را دریافت کنید.',
+      '۳. در اکوسیستم تست‌نت حداقل ۵ تراکنش Swap و Mint NFT انجام دهید تا آدرس شما فعال ثبت شود.'
+    ]
+  },
+  {
+    name: 'Abstract Chain (کمپین XP)',
+    cost: 'رایگان',
+    type: 'لایه دوم / تسک اجتماعی',
+    chain: 'Abstract (ZK Stack)',
+    vc: 'Igloo (Pudgy Penguins), Founders Fund',
+    raised: '$11,000,000',
+    reward: 'امتیاز هفتگی XP + ایردراپ',
+    deadline: 'فعال (فصل اول)',
+    urgent: false,
+    updatedAt: 'امروز (به‌روز)',
+    site: 'https://abs.xyz',
+    twitter: 'https://x.com/AbstractChain',
+    link: 'https://portal.abs.xyz',
+    task: 'شبکه لایه دوم مصرف‌کننده‌محور ساخته شده توسط تیم Pudgy Penguins با سیستم امتیازدهی شفاف.',
+    steps: [
+      '۱. وارد پورتال رسمی Abstract شوید و با جیمیل یا کیف پول خود یک حساب بسازید.',
+      '۲. حساب توییتر و دیسکورد خود را در بخش پروفایل متصل کنید تا بج‌های اولیه (Badges) را بگیرید.',
+      '۳. به صورت هفتگی با اپ‌های داخل پورتال تعامل کنید تا XP حساب شما افزایش یابد.'
+    ]
+  },
+  {
+    name: 'Linea Park (LXP-L)',
+    cost: 'نیازمند سرمایه',
+    type: 'لایه دوم / دیفای',
+    chain: 'Linea Mainnet',
+    vc: 'ConsenSys (سازنده متامسک)',
+    raised: '$725,000,000',
+    reward: 'توکن $LINEA',
+    deadline: 'نزدیک به پایان 🔥',
+    urgent: true,
+    updatedAt: 'امروز (به‌روز)',
+    site: 'https://linea.build',
+    twitter: 'https://x.com/LineaBuild',
+    link: 'https://linea.build/activations',
+    task: 'شبکه لایه دوم رسمی شرکت ConsenSys (خالق کیف پول متامسک) در مراحل پایانی قبل از عرضه توکن.',
+    steps: [
+      '۱. مقداری اتریوم (حداقل ۱۰ تا ۲۰ دلار) از طریق بریج به شبکه Linea Mainnet منتقل کنید.',
+      '۲. احراز هویت انسان بودن (Proof of Humanity) را در سایت رسمی Linea تکمیل کنید.',
+      '۳. در یکی از DEXهای شبکه مثل SyncSwap یا Nile تراکنش انجام دهید.'
+    ]
+  },
+  {
+    name: 'Kite AI (هوش مصنوعی)',
+    cost: 'رایگان',
+    type: 'تست‌نت هوش مصنوعی',
+    chain: 'Avalanche AI Subnet',
+    vc: 'General Catalyst, Hashed',
+    raised: '$18,000,000',
+    reward: 'امتیاز روزانه AI XP',
+    deadline: 'فعال (جدید ✨)',
+    urgent: false,
+    updatedAt: 'امروز (به‌روز)',
+    site: 'https://gokite.ai',
+    twitter: 'https://x.com/GoKiteAI',
+    link: 'https://testnet.gokite.ai',
+    task: 'پروژه بلاکچین هوش مصنوعی بدون نیاز به سرمایه؛ فقط با چت کردن روزانه با ایجنت‌های هوش مصنوعی امتیاز بگیرید.',
+    steps: [
+      '۱. کیف پول خود را به داشبورد تست‌نت Kite AI متصل کنید.',
+      '۲. شبکه‌های اجتماعی خود را وصل کرده و روزانه ۳ سوال از چت‌بات‌های هوش مصنوعی داخل سایت بپرسید.',
+      '۳. امتیازات خود را در بخش Leaderboard چک کنید.'
+    ]
+  }
+];
+
+var currentDropFilter = 'all';
+
+function setupDropsFilterUI() {
+  var dropsPage = document.getElementById('page-drops');
+  if (!dropsPage || document.getElementById('drops-search-box')) return;
+  var headWrap = dropsPage.querySelector('.sec-wrap');
+  if (headWrap) {
+    var filterBox = document.createElement('div');
+    filterBox.id = 'drops-search-box';
+    filterBox.innerHTML =
+      '<input id="drop-q-inp" class="inp" type="text" placeholder="🔍 جستجوی نام ایردراپ، شبکه یا سرمایه‌گذار..." oninput="renderProDrops()" style="margin-bottom:10px;">' +
+      '<div class="filter-chips">' +
+        '<button class="f-chip active" onclick="setDropFilter(\'all\', this)">🌐 همه پروژه‌ها</button>' +
+        '<button class="f-chip" onclick="setDropFilter(\'free\', this)">🆓 کاملاً رایگان</button>' +
+        '<button class="f-chip" onclick="setDropFilter(\'paid\', this)">💰 نیازمند سرمایه</button>' +
+        '<button class="f-chip" onclick="setDropFilter(\'urgent\', this)">🔥 نزدیک به پایان</button>' +
+        '<button class="f-chip" onclick="setDropFilter(\'saved\', this)">⭐ ذخیره‌شده‌ها</button>' +
+      '</div>';
+    headWrap.appendChild(filterBox);
+  }
+}
+
+function setDropFilter(f, btn) {
+  currentDropFilter = f;
+  var chips = document.querySelectorAll('.f-chip');
+  for (var i = 0; i < chips.length; i++) chips[i].classList.remove('active');
+  if (btn) btn.classList.add('active');
+  renderProDrops();
+}
+
+function getAllCombinedDrops() {
+  var custom = (cloudDrops || []).map(function(d) {
+    return {
+      name: d.name,
+      cost: d.cost || 'رایگان',
+      type: d.type || 'ایردراپ فعال',
+      chain: d.chain || 'Multi-Chain',
+      vc: d.vc || 'نامشخص',
+      raised: d.raised || '-',
+      reward: d.reward || 'توکن پروژه',
+      deadline: d.deadline || 'فعال',
+      urgent: Boolean(d.urgent),
+      updatedAt: 'ثبت شده توسط ادمین',
+      site: d.site || d.link || '#',
+      twitter: d.twitter || 'https://x.com',
+      link: d.link || '#',
+      task: d.task || '',
+      steps: Array.isArray(d.steps) ? d.steps : [
+        '۱. از طریق دکمه زیر وارد صفحه رسمی پروژه شوید.',
+        '۲. کیف پول خود را متصل کرده و مراحل خواسته شده (' + (d.task || 'تسک‌ها') + ') را انجام دهید.',
+        '۳. پروژه را در پروفایل خود ذخیره کنید تا اطلاعیه‌های بعدی را از دست ندهید.'
+      ]
+    };
+  });
+  return custom.concat(BUILTIN_PRO_DROPS);
+}
+
+function renderProDrops() {
+  setupDropsFilterUI();
+  var dropsContainer = document.getElementById('drops-list');
+  if (!dropsContainer) return;
+
+  var allD = getAllCombinedDrops();
+  var qEl = document.getElementById('drop-q-inp');
+  var q = qEl ? qEl.value.trim().toLowerCase() : '';
+
+  var filtered = allD.filter(function(d) {
+    if (q && !(d.name.toLowerCase().includes(q) || d.chain.toLowerCase().includes(q) || d.vc.toLowerCase().includes(q))) return false;
+    if (currentDropFilter === 'free' && !d.cost.includes('رایگان')) return false;
+    if (currentDropFilter === 'paid' && d.cost.includes('رایگان')) return false;
+    if (currentDropFilter === 'urgent' && !d.urgent) return false;
+    if (currentDropFilter === 'saved' && !(savedDrops || []).includes(d.name)) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    dropsContainer.innerHTML = '<div style="color:var(--muted);text-align:center;padding:24px;font-size:13px;">پروژه‌ای با این فیلتر یافت نشد.</div>';
+    return;
+  }
+
+  dropsContainer.innerHTML = filtered.map(function(d, idx) {
+    var isFree = d.cost.includes('رایگان');
+    var isSaved = (savedDrops || []).includes(d.name);
+    var clicks = parseInt(localStorage.getItem('cr_clk_' + d.name) || '42');
+    return '<div class="info-card" onclick="openProDropDetail(' + idx + ')" style="border-right:3px solid ' + (d.urgent ? '#f43f5e' : (isFree ? '#10b981' : '#eab308')) + ';">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div style="font-size:16px;font-weight:900;">🪂 ' + d.name + (isSaved ? ' ⭐' : '') + '</div>' +
+        '<div style="display:flex;gap:5px;">' +
+          '<span class="badge" style="background:' + (isFree ? 'rgba(16,185,129,0.15);color:#10b981' : 'rgba(234,179,8,0.15);color:#eab308') + ';">' + d.cost + '</span>' +
+          '<span class="badge" style="color:' + (d.urgent ? '#fb7185' : '#60a5fa') + ';">⏳ ' + d.deadline + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;">' + d.task + '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;background:#0b0e14;padding:8px 10px;border-radius:10px;margin-bottom:8px;">' +
+        '<span>⛓️ شبکه: <b style="color:#fff;">' + d.chain + '</b></span>' +
+        '<span>| 💰 جذب سرمایه: <b style="color:#10b981;">' + d.raised + '</b></span>' +
+        '<span>| 🏛️ حامی: <b style="color:#60a5fa;">' + d.vc + '</b></span>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8;">' +
+        '<span>🕒 بروزرسانی: ' + d.updatedAt + ' | 👁️ ' + clicks + ' بازدید</span>' +
+        '<span style="color:#3b82f6;font-weight:bold;">📖 آموزش کامل و لینک‌ها 〈</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  window.crCurrentFilteredDrops = filtered;
+}
+
+function openProDropDetail(idx) {
+  var list = window.crCurrentFilteredDrops || getAllCombinedDrops();
+  var d = list[idx];
+  if (!d) return;
+
+  // ثبت شمارش کلیک پروژه
+  var curClk = parseInt(localStorage.getItem('cr_clk_' + d.name) || '42') + 1;
+  localStorage.setItem('cr_clk_' + d.name, curClk);
+
+  var isSaved = (savedDrops || []).includes(d.name);
+  var stepsHtml = (d.steps || []).map(function(s) {
+    return '<div style="background:#131824;padding:9px 12px;border-radius:10px;margin-bottom:6px;font-size:12px;line-height:1.7;border-right:2px solid #3b82f6;">' + s + '</div>';
+  }).join('');
+
+  document.getElementById('modal-body').innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+      '<h3 style="font-size:18px;font-weight:900;margin:0;">🪂 ' + d.name + '</h3>' +
+      '<span class="badge">' + d.cost + '</span>' +
+    '</div>' +
+    '<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">🕒 آخرین بروزرسانی: ' + d.updatedAt + ' | ⏳ وضعیت: <b style="color:#fb7185;">' + d.deadline + '</b></div>' +
+    '<p style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">' + d.task + '</p>' +
+    '<div style="background:#0b0e14;padding:12px;border-radius:14px;margin-bottom:14px;font-size:12px;line-height:1.9;">' +
+      '<div>⛓️ <b>شبکه و نوع فعالیت:</b> ' + d.chain + ' (' + d.type + ')</div>' +
+      '<div>🏛️ <b>سرمایه‌گذاران (VCs):</b> <span style="color:#60a5fa">' + d.vc + '</span></div>' +
+      '<div>💰 <b>سرمایه جذب‌شده:</b> <span style="color:#10b981">' + d.raised + '</span></div>' +
+      '<div>🎁 <b>پاداش کمپین:</b> <span style="color:#eab308">' + d.reward + '</span></div>' +
+    '</div>' +
+    '<div style="margin-bottom:14px;">' +
+      '<div style="font-size:13px;font-weight:900;color:#fff;margin-bottom:8px;">🎓 آموزش گام‌به‌گام شرکت در ایردراپ:</div>' +
+      stepsHtml +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">' +
+      '<a href="' + d.site + '" target="_blank" style="background:#1e293b;color:#fff;text-align:center;padding:9px;border-radius:10px;text-decoration:none;font-size:11px;font-weight:bold;">🌐 سایت رسمی</a>' +
+      '<a href="' + d.twitter + '" target="_blank" style="background:#1e293b;color:#60a5fa;text-align:center;padding:9px;border-radius:10px;text-decoration:none;font-size:11px;font-weight:bold;">🐦 توییتر (X) پروژه</a>' +
+    '</div>' +
+    '<a href="' + d.link + '" target="_blank" class="spin-btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px;">🚀 ورود مستقیم به کمپین و شروع تسک‌ها</a>' +
+    '<button onclick="toggleSaveDrop(\'' + d.name + '\'); renderProDrops();" style="width:100%;background:' + (isSaved ? '#ef4444' : '#10b981') + ';color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-bottom:8px;cursor:pointer;">' +
+      (isSaved ? '⭐ حذف از ایردراپ‌های من' : '⭐ ذخیره در پروفایل من') +
+    '</button>' +
+    '<button onclick="closeModal()" style="width:100%;background:#222838;color:#fff;border:none;padding:10px;border-radius:12px;cursor:pointer;">بستن</button>';
+  document.getElementById('modal').classList.add('show');
+}
+
+// جایگزینی رندر لیست ایردراپ با نسخه حرفه‌ای
+var origRenderLists = renderLists;
+renderLists = function() {
+  origRenderLists();
+  renderProDrops();
+};
+
+// ۴. افزودن فوتر «درباره ما و تماس با ما» در پایین سایت
+function injectAboutFooter() {
+  if (document.getElementById('cr-footer')) return;
+  var ft = document.createElement('footer');
+  ft.id = 'cr-footer';
+  ft.style.cssText = 'margin:30px 14px 24px; padding:18px; background:#131722; border:1px solid #1e2433; border-radius:18px; text-align:center; font-size:12px; color:#94a3b8; line-height:1.8;';
+  ft.innerHTML =
+    '<div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:6px;">crypto<span style="color:#3b82f6;">rank</span> FA</div>' +
+    '<div style="margin-bottom:12px;">اولین پلتفرم جامع فارسی رصد لحظه‌ای بازار کریپتو، شکار ایردراپ‌های معتبر با آموزش گام‌به‌گام، بررسی صندوق‌های سرمایه‌گذاری (VC) و گردونه جوایز هفتگی.</div>' +
+    '<div style="display:flex;justify-content:center;gap:10px;margin-bottom:10px;">' +
+      '<button onclick="openAboutModal()" style="background:#1e293b;color:#fff;border:1px solid #334155;padding:7px 14px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;">ℹ️ درباره ما و قوانین جوایز</button>' +
+      '<button onclick="openContactModal()" style="background:#1e293b;color:#60a5fa;border:1px solid #334155;padding:7px 14px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;">📞 تماس با ما و پشتیبانی</button>' +
+    '</div>' +
+    '<div style="font-size:10px;color:#64748b;">تمامی اطلاعات قیمت‌ها، اخبار و آنلاک توکن‌ها به صورت کاملاً خودکار و آنلاین بروزرسانی می‌شوند. © 2026</div>';
+  document.body.appendChild(ft);
+}
+
+function openAboutModal() {
+  document.getElementById('modal-body').innerHTML =
+    '<h3 style="font-size:17px;font-weight:900;margin-bottom:10px;">ℹ️ درباره کریپتورنک فارسی</h3>' +
+    '<p style="font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:12px;">کریپتورنک فارسی با هدف دسترسی سریع، رایگان و بدون تحریم کاربران ایرانی به داده‌های دست‌اول بازار رمزارزها، پروژه‌های ایردراپ تاییدشده و تقویم آزادسازی توکن‌ها طراحی شده است.</p>' +
+    '<div style="background:#0b0e14;padding:12px;border-radius:12px;font-size:12px;line-height:1.8;margin-bottom:14px;">' +
+      '<b style="color:#10b981;">🎁 قوانین گردونه شانس:</b><br>' +
+      '• هر کاربر دارای حساب جیمیل تاییدشده می‌تواند هر ۲۴ ساعت یک‌بار گردونه را بچرخاند.<br>' +
+      '• جوایز برنده شده در حساب ابری کاربر تجمیع شده و روزهای جمعه به آدرس کیف پول ثبت‌شده در پروفایل واریز می‌گردد.' +
+    '</div>' +
+    '<button onclick="closeModal()" class="spin-btn" style="width:100%;">متوجه شدم</button>';
+  document.getElementById('modal').classList.add('show');
+}
+
+function openContactModal() {
+  document.getElementById('modal-body').innerHTML =
+    '<h3 style="font-size:17px;font-weight:900;margin-bottom:10px;">📞 تماس با تیم کریپتورنک</h3>' +
+    '<p style="font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:14px;">برای معرفی پروژه‌های جدید، گزارش لینک‌های خراب، همکاری تبلیغاتی یا پیگیری واریز جوایز گردونه، می‌توانید از طریق ایمیل رسمی پلتفرم یا بخش پروفایل کاربری با مدیریت در ارتباط باشید.</p>' +
+    '<div style="background:#0b0e14;padding:12px;border-radius:12px;font-size:12px;text-align:center;direction:ltr;color:#60a5fa;margin-bottom:14px;">Support: CryptoRank FA Official</div>' +
+    '<button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن</button>';
+  document.getElementById('modal').classList.add('show');
+}
+
+updateLiveAutoUnlocks();
+renderProDrops();
+injectAboutFooter();

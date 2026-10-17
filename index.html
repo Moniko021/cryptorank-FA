@@ -11,8 +11,31 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
   <script src="firebase-config.js"></script>
+  <meta name="description" content="کریپتورنک فارسی | مرجع قیمت لحظه‌ای ارزهای دیجیتال، شکار ایردراپ‌های معتبر با آموزش گام‌به‌گام، تقویم آنلاک توکن و گردونه جوایز روزانه">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚀</text></svg>">
+  <style>
+    #cr-splash { position:fixed; inset:0; background:#0b0e14; z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; transition:opacity 0.5s ease; }
+    .splash-logo { font-size:34px; font-weight:900; color:#fff; letter-spacing:-1px; animation:pulseSplash 1.2s infinite alternate; }
+    .splash-logo span { color:#3b82f6; }
+    .splash-loader { width:140px; height:4px; background:#1e2433; border-radius:4px; margin-top:18px; overflow:hidden; position:relative; }
+    .splash-bar { width:0%; height:100%; background:linear-gradient(90deg,#3b82f6,#10b981); animation:loadBar 1.8s forwards ease-in-out; }
+    @keyframes pulseSplash { from { transform:scale(0.96); opacity:0.8; } to { transform:scale(1.04); opacity:1; } }
+    @keyframes loadBar { 0% { width:0%; } 100% { width:100%; } }
+    .filter-chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:10px; margin-bottom:12px; scrollbar-width:none; }
+    .filter-chips::-webkit-scrollbar { display:none; }
+    .f-chip { background:#131722; border:1px solid #222838; color:#94a3b8; padding:7px 14px; border-radius:20px; font-size:11px; font-weight:800; white-space:nowrap; cursor:pointer; }
+    .f-chip.active { background:#3b82f6; color:#fff; border-color:#3b82f6; }
+  </style>
 </head>
 <body>
+  <!-- صفحه نمایش ۲ ثانیه‌ای لوگو قبل از ورود به سایت -->
+  <div id="cr-splash">
+    <div style="font-size:48px; margin-bottom:8px;">🚀</div>
+    <div class="splash-logo">crypto<span>rank</span></div>
+    <div style="font-size:12px; color:#94a3b8; margin-top:6px;">پلتفرم هوشمند تحلیل کریپتو و شکار ایردراپ</div>
+    <div class="splash-loader"><div class="splash-bar"></div></div>
+  </div>
+
 
   <!-- پنجره ورود اولیه -->
   <div id="auth-modal" class="auth-overlay">
@@ -217,6 +240,6 @@
 
   <div id="modal" class="modal" onclick="closeModal()"><div class="modal-box" onclick="event.stopPropagation()"><div id="modal-body"></div></div></div>
 
-  <script src="app.js?v=800"></script>
+  <script src="app.js?v=900"></script>
 </body>
 </html>

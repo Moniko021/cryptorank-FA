@@ -21,6 +21,10 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="firebase-config.js"></script>
+<style>
+  /* مخفی کردن کامل تب‌های اخبار فوری و آنلاک توکن در پنل مدیریت */
+  button[onclick*="news"], button[onclick*="unlock"], .tab-btn:nth-child(2), .tab-btn:nth-child(3) { display: none !important; }
+</style>
 </head>
 <body>
 
