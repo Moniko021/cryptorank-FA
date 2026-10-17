@@ -721,43 +721,103 @@ renderLists();
 initAuth();
 fetchMarket();
 
+var CR_EMAILJS_KEY = '8ajZprWhO5Ui9IvfD';
+var CR_EMAILJS_SERVICE = 'service_wgdnhlj';
+var CR_EMAILJS_TEMPLATE = 'template_f4xspnv';
+var crGeneratedOTP = null;
+var crPendingUser = null;
+var crUserUnsub = null;
 
-// === ارتقای کامل: گردونه ۸ خانه‌ای، پروفایل اختصاصی جیمیل، کیف پول و ضد قفل قیمت‌ها ===
-const EMAILJS_PUBLIC_KEY = '8ajZprWhO5Ui9IvfD';
-const EMAILJS_SERVICE_ID = 'service_wgdnhlj';
-const EMAILJS_TEMPLATE_ID = 'template_f4xspnv';
-let generatedOTP = null;
-let pendingUser = null;
-let userUnsub = null;
-
-// لیست ۸ خانه گردونه دقیقاً مطابق زاویه گرافیکی و شانس تعیین‌شده
-const WHEEL_ITEMS = [
-  { idx: 0, label: '۱ میلیون تومان', amount: 1000000, weight: 0.1 },   // 1 در 1000
-  { idx: 1, label: '۸۰۰ هزار تومان', amount: 800000,  weight: 0.1 },   // 1 در 1000
-  { idx: 2, label: '۵۰۰ هزار تومان', amount: 500000,  weight: 0.1 },   // 1 در 1000
-  { idx: 3, label: '🎁 جایزه ویژه',  amount: 0,       weight: 0.0 },   // 0 درصد مطلق
-  { idx: 4, label: 'پوچ',            amount: 0,       weight: 90.0 },  // نسبت شانس 90
-  { idx: 5, label: '۱۰۰ هزار تومان', amount: 100000,  weight: 30.0 },  // نسبت شانس 30
-  { idx: 6, label: '۵۰ هزار تومان',  amount: 50000,   weight: 50.0 },  // نسبت شانس 50
-  { idx: 7, label: '۱۰ هزار تومان',  amount: 10000,   weight: 90.0 }   // نسبت شانس 90
+var CR_WHEEL_ITEMS = [
+  { idx: 0, label: '۱ میلیون تومان', amount: 1000000, weight: 0.1 },
+  { idx: 1, label: '۸۰۰ هزار تومان', amount: 800000,  weight: 0.1 },
+  { idx: 2, label: '۵۰۰ هزار تومان', amount: 500000,  weight: 0.1 },
+  { idx: 3, label: '🎁 جایزه ویژه',  amount: 0,       weight: 0.0 },
+  { idx: 4, label: 'پوچ',            amount: 0,       weight: 90.0 },
+  { idx: 5, label: '۱۰۰ هزار تومان', amount: 100000,  weight: 30.0 },
+  { idx: 6, label: '۵۰ هزار تومان',  amount: 50000,   weight: 50.0 },
+  { idx: 7, label: '۱۰ هزار تومان',  amount: 10000,   weight: 90.0 }
 ];
 
-function getDocKey(e) { return e.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'); }
+function getDocKey(e) { return String(e || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_'); }
 function getSpinKey() { return (currentUser && currentUser.type === 'google' && currentUser.email) ? 'cr_spin_' + getDocKey(currentUser.email) : 'cr_spin_guest'; }
 function getVaultKey(e) { return 'cr_vault_' + getDocKey(e); }
 
+function upgradeUIElements() {
+  var gForm = document.getElementById('google-form');
+  if (gForm && !document.getElementById('otp-step-1')) {
+    gForm.innerHTML =
+      '<div id="otp-step-1">' +
+        '<div style="font-size:13px;font-weight:800;margin-bottom:10px;color:#60a5fa;">ورود با جیمیل (با کد تایید ۶ رقمی)</div>' +
+        '<input id="g-name" class="inp" type="text" placeholder="نام شما (مثلاً کوروش)">' +
+        '<input id="g-email" class="inp" type="email" placeholder="example@gmail.com" style="direction:ltr;text-align:left;">' +
+        '<button id="send-otp-btn" onclick="sendVerificationCode()" class="spin-btn" style="width:100%;margin-bottom:8px;">📨 ارسال کد تایید به جیمیل</button>' +
+        '<button onclick="hideGoogleForm()" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;padding:6px;">بازگشت</button>' +
+      '</div>' +
+      '<div id="otp-step-2" style="display:none;">' +
+        '<div style="font-size:13px;font-weight:800;margin-bottom:6px;color:#10b981;">✅ کد ۶ رقمی به جیمیل ارسال شد!</div>' +
+        '<div id="otp-email-preview" style="font-size:11px;color:var(--muted);margin-bottom:10px;direction:ltr;text-align:center;"></div>' +
+        '<input id="g-otp-code" class="inp" type="number" placeholder="کد ۶ رقمی را وارد کنید" style="direction:ltr;text-align:center;font-size:16px;font-weight:bold;">' +
+        '<button onclick="verifyAndLogin()" class="spin-btn" style="width:100%;margin-bottom:8px;background:#10b981;">🔐 تایید کد و ورود</button>' +
+        '<button onclick="resetOtpStep()" style="width:100%;background:none;border:none;color:var(--muted);font-size:12px;padding:6px;">✏️ ویرایش جیمیل</button>' +
+      '</div>';
+  }
+
+  var wheelBox = document.querySelector('.wheel-box');
+  if (wheelBox && !document.getElementById('wheel-upgraded-flag')) {
+    var labels = ['۱ میلیون', '۸۰۰ هزار', '۵۰۰ هزار', '🎁', 'پوچ ❌', '۱۰۰ هزار', '۵۰ هزار', '۱۰ هزار'];
+    var degs = [-67.5, -22.5, 22.5, 67.5, 112.5, 157.5, 202.5, 247.5];
+    var cols = ['#000', '#fff', '#fff', '#fff', '#cbd5e1', '#fff', '#fff', '#000'];
+    var slicesHtml = '';
+    for (var i = 0; i < 8; i++) {
+      slicesHtml += '<div style="position:absolute;top:50%;left:50%;width:120px;height:22px;margin-top:-11px;transform-origin:0 50%;transform:rotate(' + degs[i] + 'deg);text-align:right;padding-right:10px;font-size:11px;font-weight:900;color:' + cols[i] + ';direction:ltr;">' + labels[i] + '</div>';
+    }
+    wheelBox.innerHTML =
+      '<div id="wheel-upgraded-flag" style="font-size:16px;font-weight:900;margin-bottom:4px;">🎡 گردونه میلیونی روزانه</div>' +
+      '<div style="font-size:12px;color:var(--muted);">هر ۲۴ ساعت یک‌بار بچرخانید و جایزه نقدی ببرید!</div>' +
+      '<div class="wheel-wrap" style="width:260px;height:260px;margin:18px auto;position:relative;">' +
+        '<div class="wheel-pointer" style="top:-16px;font-size:28px;z-index:25;">🔻</div>' +
+        '<div id="wheel-el" style="width:100%;height:100%;border-radius:50%;position:relative;overflow:hidden;border:5px solid #2a324b;box-shadow:0 0 25px rgba(59,130,246,0.35);transition:transform 4s cubic-bezier(0.15, 0.85, 0.15, 1);background:conic-gradient(#eab308 0deg 45deg, #8b5cf6 45deg 90deg, #ec4899 90deg 135deg, #f97316 135deg 180deg, #334155 180deg 225deg, #10b981 225deg 270deg, #3b82f6 270deg 315deg, #06b6d4 315deg 360deg);">' +
+          slicesHtml +
+          '<div style="position:absolute;inset:0;margin:auto;width:44px;height:44px;background:#131722;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;z-index:10;">🎯</div>' +
+        '</div>' +
+      '</div>' +
+      '<button class="spin-btn" onclick="spinWheel()">🎯 چرخاندن گردونه شانس</button>' +
+      '<div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:12px;line-height:1.8;background:#0b0e14;padding:10px 12px;border-radius:12px;border:1px solid #1e2433;">' +
+        'جوایز در حساب کاربری ذخیره میشه هر جمعه به حساب کاربر ها واریز میشه جوایز میتونه نقدی یا به صورت ارز دیجیتال واریز بشه' +
+      '</div>';
+  }
+
+  var navBar = document.querySelector('.nav-bar');
+  if (navBar && !document.getElementById('nav-profile-btn')) {
+    var profBtn = document.createElement('div');
+    profBtn.className = 'nav-item';
+    profBtn.id = 'nav-profile-btn';
+    profBtn.innerHTML = '<i>👤</i>پروفایل من';
+    profBtn.onclick = function() { switchTab('profile', profBtn); };
+    navBar.insertBefore(profBtn, navBar.firstChild);
+  }
+
+  if (!document.getElementById('sec-profile')) {
+    var secProf = document.createElement('div');
+    secProf.id = 'sec-profile';
+    secProf.className = 'section';
+    secProf.innerHTML = '<div id="profile-page-container"></div>';
+    var convSec = document.getElementById('sec-converter');
+    if (convSec && convSec.parentNode) convSec.parentNode.insertBefore(secProf, convSec.nextSibling);
+    else document.body.appendChild(secProf);
+  }
+}
+
 function saveToLocalVault() {
   if (currentUser && currentUser.type === 'google' && currentUser.email) {
-    const vKey = getVaultKey(currentUser.email);
-    const data = {
-      name: currentUser.name,
-      email: currentUser.email.trim().toLowerCase(),
+    var vKey = getVaultKey(currentUser.email);
+    var data = {
+      name: currentUser.name, email: currentUser.email.trim().toLowerCase(),
       balanceToman: Number(currentUser.balanceToman) || 0,
       prizesList: Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [],
-      solWallet: currentUser.solWallet || '',
-      ethWallet: currentUser.ethWallet || '',
-      savedDrops: savedDrops || [],
-      lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null
+      solWallet: currentUser.solWallet || '', ethWallet: currentUser.ethWallet || '',
+      savedDrops: savedDrops || [], lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null
     };
     localStorage.setItem(vKey, JSON.stringify(data));
     localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
@@ -769,46 +829,32 @@ syncUserToCloud = function() {
   if (currentUser && currentUser.type === 'google' && currentUser.email) {
     saveToLocalVault();
     if (typeof db !== 'undefined') {
-      const k = getDocKey(currentUser.email);
+      var k = getDocKey(currentUser.email);
       db.collection("users").doc(k).set({
-        name: currentUser.name,
-        email: currentUser.email.trim().toLowerCase(),
+        name: currentUser.name, email: currentUser.email.trim().toLowerCase(),
         balanceToman: Number(currentUser.balanceToman) || 0,
         prizesList: Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [],
-        solWallet: currentUser.solWallet || '',
-        ethWallet: currentUser.ethWallet || '',
-        savedDrops: savedDrops || [],
-        lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
+        solWallet: currentUser.solWallet || '', ethWallet: currentUser.ethWallet || '',
+        savedDrops: savedDrops || [], lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
         updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(()=>{});
+      }, { merge: true }).catch(function(){});
     }
   }
 };
 
 loadUserFromCloud = function(email) {
   if (typeof db === 'undefined' || !email) return;
-  const k = getDocKey(email);
-  if (userUnsub) userUnsub();
-  userUnsub = db.collection("users").doc(k).onSnapshot((doc) => {
+  var k = getDocKey(email);
+  if (crUserUnsub) crUserUnsub();
+  crUserUnsub = db.collection("users").doc(k).onSnapshot(function(doc) {
     if (doc.exists && currentUser && currentUser.type === 'google') {
-      const d = doc.data();
+      var d = doc.data();
       currentUser.balanceToman = Math.max(Number(d.balanceToman) || 0, Number(currentUser.balanceToman) || 0);
-      if (Array.isArray(d.prizesList) && d.prizesList.length > (currentUser.prizesList || []).length) {
-        currentUser.prizesList = d.prizesList;
-      }
+      if (Array.isArray(d.prizesList) && d.prizesList.length > (currentUser.prizesList || []).length) currentUser.prizesList = d.prizesList;
       if (d.solWallet && !currentUser.solWallet) currentUser.solWallet = d.solWallet;
       if (d.ethWallet && !currentUser.ethWallet) currentUser.ethWallet = d.ethWallet;
-      if (Array.isArray(d.savedDrops) && d.savedDrops.length > 0) {
-        savedDrops = Array.from(new Set([...(savedDrops || []), ...d.savedDrops]));
-        localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
-      }
-      if (d.lastSpin) {
-        currentUser.lastSpin = String(d.lastSpin);
-        localStorage.setItem(getSpinKey(), String(d.lastSpin));
-      }
-      saveToLocalVault();
-      updateUserHeader();
-      renderProfilePage();
+      if (d.lastSpin) { currentUser.lastSpin = String(d.lastSpin); localStorage.setItem(getSpinKey(), String(d.lastSpin)); }
+      saveToLocalVault(); updateUserHeader(); renderProfilePage();
     }
   });
 };
@@ -817,260 +863,144 @@ realGoogleSignIn = function() { showGoogleForm(); };
 quickGoogleLogin = function() { showGoogleForm(); };
 
 function resetOtpStep() {
-  const s1 = document.getElementById('otp-step-1');
-  const s2 = document.getElementById('otp-step-2');
-  if (s1) s1.style.display = 'block';
-  if (s2) s2.style.display = 'none';
-  const inp = document.getElementById('g-otp-code');
-  if (inp) inp.value = '';
+  document.getElementById('otp-step-1').style.display = 'block';
+  document.getElementById('otp-step-2').style.display = 'none';
+  document.getElementById('g-otp-code').value = '';
 }
 
 async function sendVerificationCode() {
-  const name = document.getElementById('g-name').value.trim();
-  const email = document.getElementById('g-email').value.trim().toLowerCase();
+  var name = document.getElementById('g-name').value.trim();
+  var email = document.getElementById('g-email').value.trim().toLowerCase();
   if (!name || !email || !email.includes('@')) return alert('لطفاً نام و آدرس جیمیل معتبر وارد کنید.');
-  generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
-  pendingUser = { name, email };
-  const btn = document.getElementById('send-otp-btn');
+  crGeneratedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+  crPendingUser = { name: name, email: email };
+  var btn = document.getElementById('send-otp-btn');
   btn.innerText = '⏳ در حال ارسال کد...'; btn.disabled = true;
   try {
-    emailjs.init(EMAILJS_PUBLIC_KEY);
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_name: name, name: name, from_name: 'CryptoRank FA',
-      to_email: email, email: email,
-      otp_code: generatedOTP, code: generatedOTP,
-      title: 'کد تایید: ' + generatedOTP,
-      message: 'کد تایید ورود شما به کریپتورنک: ' + generatedOTP
+    emailjs.init(CR_EMAILJS_KEY);
+    await emailjs.send(CR_EMAILJS_SERVICE, CR_EMAILJS_TEMPLATE, {
+      to_name: name, name: name, from_name: 'CryptoRank FA', to_email: email, email: email,
+      otp_code: crGeneratedOTP, code: crGeneratedOTP, title: 'کد تایید: ' + crGeneratedOTP,
+      message: 'کد تایید ورود شما به کریپتورنک: ' + crGeneratedOTP
     });
     document.getElementById('otp-step-1').style.display = 'none';
     document.getElementById('otp-step-2').style.display = 'block';
     document.getElementById('otp-email-preview').innerText = email;
   } catch (err) {
-    alert('خطا در ارسال ایمیل: ' + (err.text || 'تنظیمات EmailJS را بررسی کنید'));
+    alert('خطا در ارسال ایمیل');
   } finally {
     btn.innerText = '📨 ارسال کد تایید به جیمیل'; btn.disabled = false;
   }
 }
 
 async function verifyAndLogin() {
-  const code = document.getElementById('g-otp-code').value.trim();
-  if (code !== generatedOTP) return alert('❌ کد وارد شده اشتباه است!');
-  generatedOTP = null;
-  const cleanEmail = pendingUser.email.trim().toLowerCase();
-  const k = getDocKey(cleanEmail);
-  const vKey = getVaultKey(cleanEmail);
-
-  let bal = 0, pList = [], solW = '', ethW = '', drops = [], lSpin = localStorage.getItem('cr_spin_' + k) || null;
-  const localVault = localStorage.getItem(vKey);
-  if (localVault) {
+  var code = document.getElementById('g-otp-code').value.trim();
+  if (code !== crGeneratedOTP) return alert('❌ کد وارد شده اشتباه است!');
+  crGeneratedOTP = null;
+  var cleanEmail = crPendingUser.email.trim().toLowerCase();
+  var k = getDocKey(cleanEmail), vKey = getVaultKey(cleanEmail);
+  var bal = 0, pList = [], solW = '', ethW = '', drops = [], lSpin = localStorage.getItem('cr_spin_' + k) || null;
+  var lv = localStorage.getItem(vKey);
+  if (lv) {
     try {
-      const vd = JSON.parse(localVault);
+      var vd = JSON.parse(lv);
       bal = Number(vd.balanceToman) || 0;
       if (Array.isArray(vd.prizesList)) pList = vd.prizesList;
-      solW = vd.solWallet || '';
-      ethW = vd.ethWallet || '';
+      solW = vd.solWallet || ''; ethW = vd.ethWallet || '';
       if (Array.isArray(vd.savedDrops)) drops = vd.savedDrops;
       if (vd.lastSpin) lSpin = String(vd.lastSpin);
     } catch(e){}
   }
-
   if (typeof db !== 'undefined') {
     try {
-      const doc = await db.collection("users").doc(k).get();
+      var doc = await db.collection("users").doc(k).get();
       if (doc.exists) {
-        const d = doc.data();
+        var d = doc.data();
         bal = Math.max(bal, Number(d.balanceToman) || 0);
         if (Array.isArray(d.prizesList) && d.prizesList.length > pList.length) pList = d.prizesList;
         if (d.solWallet) solW = d.solWallet;
         if (d.ethWallet) ethW = d.ethWallet;
-        if (Array.isArray(d.savedDrops)) drops = Array.from(new Set([...drops, ...d.savedDrops]));
         if (d.lastSpin && (!lSpin || Number(d.lastSpin) > Number(lSpin))) lSpin = String(d.lastSpin);
       }
     } catch(e){}
   }
-
-  currentUser = {
-    type: 'google', name: pendingUser.name, email: cleanEmail,
-    balanceToman: bal, prizesList: pList, solWallet: solW, ethWallet: ethW, lastSpin: lSpin
-  };
-  savedGoogleAccount = Object.assign({}, currentUser);
-  savedDrops = drops;
+  currentUser = { type: 'google', name: crPendingUser.name, email: cleanEmail, balanceToman: bal, prizesList: pList, solWallet: solW, ethWallet: ethW, lastSpin: lSpin };
+  savedGoogleAccount = Object.assign({}, currentUser); savedDrops = drops;
   if (lSpin) localStorage.setItem(getSpinKey(), lSpin);
-  localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
-
-  saveToLocalVault();
-  syncUserToCloud();
-  loadUserFromCloud(cleanEmail);
-
+  saveToLocalVault(); syncUserToCloud(); loadUserFromCloud(cleanEmail);
   document.getElementById('auth-modal').classList.remove('show');
-  updateUserHeader();
-  renderLists();
-  renderProfilePage();
+  updateUserHeader(); renderLists(); renderProfilePage();
 }
 
-// چرخش گردونه ۸ خانه‌ای با توقف دقیق عقربه روی خانه برنده شده
 spinWheel = function() {
   if (!currentUser || currentUser.type !== 'google') {
-    alert('⚠️ برای چرخاندن گردونه و ذخیره جوایز، لطفاً ابتدا با جیمیل خود وارد شوید.');
+    alert('⚠️ برای چرخاندن گردونه و ذخیره جوایز، ابتدا با جیمیل خود وارد شوید.');
     document.getElementById('auth-modal').classList.add('show');
     return;
   }
-  const sk = getSpinKey();
-  const last = currentUser.lastSpin || localStorage.getItem(sk);
-  const now = Date.now();
+  var sk = getSpinKey(), last = currentUser.lastSpin || localStorage.getItem(sk), now = Date.now();
   if (last && (now - parseInt(last)) < 86400000) {
-    const h = Math.ceil((86400000 - (now - parseInt(last))) / 3600000);
-    return alert('⏳ هر اکانت فقط هر ۲۴ ساعت یک‌بار می‌تواند گردونه را بچرخاند! لطفاً ' + h + ' ساعت دیگر امتحان کنید.');
+    var h = Math.ceil((86400000 - (now - parseInt(last))) / 3600000);
+    return alert('⏳ هر اکانت فقط هر ۲۴ ساعت یک‌بار می‌تواند گردونه را بچرخاند! ' + h + ' ساعت دیگر امتحان کنید.');
   }
-
-  let totalW = WHEEL_ITEMS.reduce((acc, item) => acc + item.weight, 0);
-  let rnd = Math.random() * totalW;
-  let chosen = WHEEL_ITEMS[4];
-  let sumW = 0;
-  for (let i = 0; i < WHEEL_ITEMS.length; i++) {
-    sumW += WHEEL_ITEMS[i].weight;
-    if (rnd <= sumW) { chosen = WHEEL_ITEMS[i]; break; }
+  var totalW = 0;
+  for (var i = 0; i < CR_WHEEL_ITEMS.length; i++) totalW += CR_WHEEL_ITEMS[i].weight;
+  var rnd = Math.random() * totalW, chosen = CR_WHEEL_ITEMS[4], sumW = 0;
+  for (var j = 0; j < CR_WHEEL_ITEMS.length; j++) {
+    sumW += CR_WHEEL_ITEMS[j].weight;
+    if (rnd <= sumW) { chosen = CR_WHEEL_ITEMS[j]; break; }
   }
-
-  // تنظیم زاویه دقیق تا مرکز قاچِ انتخاب‌شده دقیقاً زیر عقربه بالا (0 درجه) قرار بگیرد
-  const sliceCenter = chosen.idx * 45 + 22.5;
-  const targetMod = (360 - sliceCenter) % 360;
-  const currentMod = wheelDeg % 360;
-  let diff = targetMod - currentMod;
+  var sliceCenter = chosen.idx * 45 + 22.5;
+  var targetMod = (360 - sliceCenter) % 360;
+  var diff = targetMod - (wheelDeg % 360);
   if (diff < 0) diff += 360;
   wheelDeg += 1800 + diff;
-
-  const wEl = document.getElementById('wheel-el');
+  var wEl = document.getElementById('wheel-el');
   if (wEl) wEl.style.transform = 'rotate(' + wheelDeg + 'deg)';
-
-  setTimeout(() => {
-    const st = Date.now().toString();
-    localStorage.setItem(sk, st);
-    currentUser.lastSpin = st;
+  setTimeout(function() {
+    var st = Date.now().toString();
+    localStorage.setItem(sk, st); currentUser.lastSpin = st;
     if (!Array.isArray(currentUser.prizesList)) currentUser.prizesList = [];
-
     if (chosen.amount > 0) {
       currentUser.balanceToman = (Number(currentUser.balanceToman) || 0) + chosen.amount;
       currentUser.prizesList.unshift({ title: chosen.label, amount: chosen.amount, date: new Date().toLocaleDateString('fa-IR') });
-      alert('🎉 تبریک ' + currentUser.name + '! شما برنده «' + chosen.label + '» شدید! جایزه در پروفایل شما ذخیره شد و روز جمعه واریز می‌شود.');
+      alert('🎉 تبریک ' + currentUser.name + '! شما برنده «' + chosen.label + '» شدید! در حساب کاربری ذخیره شد.');
     } else {
-      alert('😕 نتیجه گردونه: «پوچ»! اشکالی نداره، ۲۴ ساعت دیگه دوباره شانست رو امتحان کن.');
+      alert('😕 نتیجه گردونه: «پوچ»! فردا دوباره شانس خود را امتحان کنید.');
     }
-    syncUserToCloud();
-    updateUserHeader();
-    renderProfilePage();
+    syncUserToCloud(); updateUserHeader(); renderProfilePage();
   }, 4100);
 };
 
-// رندر صفحه اختصاصی پروفایل کاربری (مخصوص جیمیل وارد شده)
 function renderProfilePage() {
-  const container = document.getElementById('profile-page-container');
-  if (!container) return;
-
+  var c = document.getElementById('profile-page-container');
+  if (!c) return;
   if (!currentUser || currentUser.type !== 'google') {
-    container.innerHTML =
-      '<div style="background:var(--card); border:1px solid var(--border); border-radius:20px; padding:28px 18px; text-align:center; margin-top:14px;">' +
-        '<div style="font-size:46px; margin-bottom:10px;">🔐</div>' +
-        '<div style="font-size:16px; font-weight:900; margin-bottom:8px;">پروفایل کاربری اختصاصی</div>' +
-        '<div style="font-size:12px; color:var(--muted); line-height:1.8; margin-bottom:18px;">برای مشاهده جوایز گردونه، موجودی حساب و ثبت آدرس کیف پول سولانا یا اتریوم، لطفاً با حساب جیمیل خود وارد شوید.</div>' +
-        '<button onclick="switchAccount()" class="spin-btn" style="width:100%; max-width:280px;">📧 ورود با حساب جیمیل</button>' +
-      '</div>';
+    c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px 18px;text-align:center;margin-top:14px;"><div style="font-size:40px;">🔐</div><div style="font-size:15px;font-weight:900;margin:8px 0;">پروفایل حساب کاربری</div><div style="font-size:12px;color:var(--muted);margin-bottom:16px;">برای مشاهده جوایز و ثبت کیف پول سولانا یا اتریوم، با جیمیل وارد شوید.</div><button onclick="switchAccount()" class="spin-btn" style="width:100%;max-width:260px;">📧 ورود با جیمیل</button></div>';
     return;
   }
-
-  const bal = (Number(currentUser.balanceToman) || 0).toLocaleString('fa-IR');
-  const pList = Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [];
-  const solW = currentUser.solWallet || '';
-  const ethW = currentUser.ethWallet || '';
-
-  const historyHtml = pList.length > 0
-    ? pList.map(p => '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid #1e2433;font-size:12px;"><span style="color:#10b981;font-weight:bold;">🎁 ' + p.title + '</span><span style="color:var(--muted);">' + p.date + '</span></div>').join('')
-    : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:12px;background:#0b0e14;border-radius:10px;">هنوز جایزه‌ای از گردونه دریافت نکرده‌اید.</div>';
-
-  container.innerHTML =
-    '<div style="background:var(--card); border:1px solid var(--border); border-radius:20px; padding:18px; margin-top:10px;">' +
-      '<div style="display:flex; align-items:center; gap:14px; border-bottom:1px solid var(--border); padding-bottom:14px; margin-bottom:14px;">' +
-        '<div style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#10b981,#059669); color:#fff; font-size:24px; font-weight:900; display:flex; align-items:center; justify-content:center;">' + currentUser.name.charAt(0).toUpperCase() + '</div>' +
-        '<div style="flex:1;">' +
-          '<div style="font-size:17px; font-weight:900;">' + currentUser.name + '</div>' +
-          '<div style="font-size:12px; color:#60a5fa; direction:ltr; text-align:right;">' + currentUser.email + '</div>' +
-          '<div style="font-size:10px; color:#10b981; margin-top:3px;">● حساب تاییدشده و متصل به فضای ابری</div>' +
-        '</div>' +
-      '</div>' +
-
-      '<div style="background:linear-gradient(135deg,#1e293b,#0f172a); border:1px solid #334155; border-radius:16px; padding:16px; text-align:center; margin-bottom:16px;">' +
-        '<div style="font-size:12px; color:#94a3b8; margin-bottom:4px;">💰 مجموع جوایز برنده شده (قابل واریز در روز جمعه):</div>' +
-        '<div style="font-size:24px; font-weight:900; color:#10b981;">' + bal + ' <span style="font-size:13px;">تومان</span></div>' +
-        '<div style="font-size:10px; color:#eab308; margin-top:6px;">واریز به صورت نقدی یا معادل ارز دیجیتال به کیف پول شما</div>' +
-      '</div>' +
-
-      '<div style="background:#131824; border:1px solid #22293a; border-radius:16px; padding:14px; margin-bottom:16px;">' +
-        '<div style="font-size:13px; font-weight:900; color:#60a5fa; margin-bottom:10px;">💳 ثبت آدرس کیف پول (برای دریافت جوایز جمعه)</div>' +
-        '<div style="margin-bottom:10px;">' +
-          '<label style="font-size:11px; color:var(--muted); display:block; margin-bottom:4px;">🟣 آدرس کیف پول سولانا (Solana):</label>' +
-          '<input id="inp-sol-wallet" class="inp" type="text" value="' + solW + '" placeholder="آدرس شبکه Solana خود را وارد کنید..." style="direction:ltr; text-align:left; margin-bottom:0;">' +
-        '</div>' +
-        '<div style="margin-bottom:12px;">' +
-          '<label style="font-size:11px; color:var(--muted); display:block; margin-bottom:4px;">🔵 آدرس کیف پول اتریوم (Ethereum - 0x):</label>' +
-          '<input id="inp-eth-wallet" class="inp" type="text" value="' + ethW + '" placeholder="0x..." style="direction:ltr; text-align:left; margin-bottom:0;">' +
-        '</div>' +
-        '<button onclick="saveUserWallets()" class="spin-btn" style="width:100%; background:linear-gradient(90deg,#10b981,#059669);">💾 ثبت و ذخیره آدرس کیف پول در حساب</button>' +
-      '</div>' +
-
-      '<div style="margin-bottom:16px;">' +
-        '<div style="font-size:13px; font-weight:900; margin-bottom:8px;">🏆 تاریخچه جوایز گردونه شما:</div>' +
-        historyHtml +
-      '</div>' +
-
-      '<button onclick="switchAccount()" style="width:100%; background:#ef4444; color:#fff; border:none; padding:12px; border-radius:12px; font-weight:bold; cursor:pointer;">🚪 خروج یا تغییر حساب جیمیل</button>' +
-    '</div>';
+  var bal = (Number(currentUser.balanceToman) || 0).toLocaleString('fa-IR');
+  var pList = Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [];
+  var hist = pList.length ? pList.map(function(p){ return '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;"><span style="color:#10b981;font-weight:bold;">🎁 '+p.title+'</span><span style="color:var(--muted);">'+p.date+'</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز جایزه‌ای دریافت نکرده‌اید.</div>';
+  c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-top:10px;"><div style="font-size:17px;font-weight:900;">👤 ' + currentUser.name + '</div><div style="font-size:12px;color:#60a5fa;direction:ltr;text-align:right;margin-bottom:14px;">' + currentUser.email + '</div><div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;"><div style="font-size:11px;color:#94a3b8;">💰 موجودی جوایز (واریز هر جمعه):</div><div style="font-size:22px;font-weight:900;color:#10b981;margin-top:4px;">' + bal + ' تومان</div></div><div style="background:#131824;padding:12px;border-radius:14px;margin-bottom:14px;"><div style="font-size:12px;font-weight:900;color:#60a5fa;margin-bottom:8px;">💳 ثبت آدرس کیف پول (سولانا / اتریوم)</div><input id="inp-sol-wallet" class="inp" type="text" value="' + (currentUser.solWallet||'') + '" placeholder="آدرس کیف پول Solana..." style="direction:ltr;text-align:left;"><input id="inp-eth-wallet" class="inp" type="text" value="' + (currentUser.ethWallet||'') + '" placeholder="آدرس کیف پول Ethereum (0x)..." style="direction:ltr;text-align:left;"><button onclick="saveUserWallets()" class="spin-btn" style="width:100%;background:#10b981;">💾 ذخیره کیف پول</button></div><div style="font-size:13px;font-weight:900;margin-bottom:8px;">🏆 جوایز برنده شده:</div>' + hist + '<button onclick="switchAccount()" style="width:100%;background:#ef4444;color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-top:12px;">🚪 خروج / تغییر جیمیل</button></div>';
 }
 
 function saveUserWallets() {
   if (!currentUser || currentUser.type !== 'google') return;
-  const solEl = document.getElementById('inp-sol-wallet');
-  const ethEl = document.getElementById('inp-eth-wallet');
-  currentUser.solWallet = solEl ? solEl.value.trim() : '';
-  currentUser.ethWallet = ethEl ? ethEl.value.trim() : '';
+  currentUser.solWallet = document.getElementById('inp-sol-wallet').value.trim();
+  currentUser.ethWallet = document.getElementById('inp-eth-wallet').value.trim();
   syncUserToCloud();
-  alert('✅ آدرس کیف پول سولانا و اتریوم شما با موفقیت در حساب (' + currentUser.email + ') ذخیره شد!');
+  alert('✅ کیف پول شما در حساب (' + currentUser.email + ') ذخیره شد!');
 }
 
-// وقتی روی دکمه پروفایل هدر بالا کلیک شد، مستقیم برود به تب اختصاصی پروفایل
-openProfileModal = function() {
-  const profNav = document.getElementById('nav-profile-btn');
-  switchTab('profile', profNav);
-  renderProfilePage();
-};
+openProfileModal = function() { upgradeUIElements(); switchTab('profile', document.getElementById('nav-profile-btn')); renderProfilePage(); };
+var origSwitchTab = switchTab;
+switchTab = function(t, el) { origSwitchTab(t, el); if (t === 'profile') renderProfilePage(); };
 
-const origSwitchTab = switchTab;
-switchTab = function(tabId, el) {
-  origSwitchTab(tabId, el);
-  if (tabId === 'profile') renderProfilePage();
-};
-
-// بارگذاری اولیه اطلاعات جیمیل ذخیره شده و رندر پروفایل
+upgradeUIElements();
 if (currentUser && currentUser.type === 'google' && currentUser.email) {
-  const vKey = getVaultKey(currentUser.email);
-  const lv = localStorage.getItem(vKey);
-  if (lv) {
-    try {
-      const vd = JSON.parse(lv);
-      currentUser.balanceToman = Math.max(Number(currentUser.balanceToman)||0, Number(vd.balanceToman)||0);
-      if (Array.isArray(vd.prizesList)) currentUser.prizesList = vd.prizesList;
-      if (vd.solWallet) currentUser.solWallet = vd.solWallet;
-      if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet;
-    } catch(e){}
-  }
+  var lv = localStorage.getItem(getVaultKey(currentUser.email));
+  if (lv) { try { var vd = JSON.parse(lv); currentUser.balanceToman = Math.max(Number(currentUser.balanceToman)||0, Number(vd.balanceToman)||0); if (Array.isArray(vd.prizesList)) currentUser.prizesList = vd.prizesList; if (vd.solWallet) currentUser.solWallet = vd.solWallet; if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet; } catch(e){} }
   loadUserFromCloud(currentUser.email);
 }
 renderProfilePage();
-
-// خبرخوان زنده RSS
-fetch('https://api.rss2json.com/v1/api.json?rss_url=https://cointelegraph.com/rss').then(r=>r.json()).then(d=>{
-  if (d && Array.isArray(d.items)) {
-    const rss = d.items.slice(0, 8).map((x, i) => ({ id: 'rss_'+i, title: x.title, source: 'CoinTelegraph', time: 'زنده', desc: (x.description||'').replace(/<[^>]*>?/gm, '').substring(0, 150)+'...' }));
-    newsList = [...newsList, ...rss];
-    renderNews();
-  }
-}).catch(()=>{});
