@@ -459,6 +459,11 @@ function saveUserWallets() {
 let newsList = [];
 window.crCloudNews = [];
 window.crLiveApiNews = [];
+
+function fetchCloudData() {
+  if (typeof db === "undefined") return;
+  db.collection("drops").onSnapshot(function(snap) {
+    cloudDrops = [];
     snap.forEach(function(doc) { cloudDrops.push(Object.assign({ docId: doc.id }, doc.data())); });
     renderProDrops();
   }, function(){});
