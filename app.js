@@ -420,21 +420,24 @@ function completeCashTaskByIdx(idx) {
   var taskId = String(t.docId || t.id);
   if (!Array.isArray(currentUser.completedTasks)) currentUser.completedTasks = [];
   if (currentUser.completedTasks.includes(taskId) || busyTasks[taskId]) return;
+  
+  if (!confirm('آیا شما واقعاً این تسک را انجام داده‌اید؟ (در صورت عدم انجام، اکانت شما مسدود خواهد شد)')) return;
+
   busyTasks[taskId] = true;
   currentUser.completedTasks.push(taskId);
   renderUserTasksBox();
   var url = safeUrl(t.link);
   if (url !== '#') window.open(url, '_blank');
   var reward = Number(t.reward) || 0;
+  
   setTimeout(function() {
     currentUser.balanceToman = (Number(currentUser.balanceToman) || 0) + reward;
     if (!Array.isArray(currentUser.prizesList)) currentUser.prizesList = [];
     currentUser.prizesList.unshift({ title: 'تسک: ' + t.title + ' (' + reward.toLocaleString('fa-IR') + ' ت)', amount: reward, date: new Date().toLocaleDateString('fa-IR') });
     syncUserToCloud(); renderUserTasksBox(); renderProfilePage();
     alert('✅ تبریک! پاداش تسک (' + reward.toLocaleString('fa-IR') + ' تومان) اضافه شد.');
-  }, 1500);
+  }, 3000);
 }
-
 function renderProfilePage() {
   var c = document.getElementById('profile-page-container');
   if (!c) return;
@@ -445,9 +448,11 @@ function renderProfilePage() {
   var bal = (Number(currentUser.balanceToman) || 0).toLocaleString('fa-IR');
   var pList = Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [];
   var hist = pList.length ? pList.map(function(p){ return '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;"><span style="color:#10b981;font-weight:bold;">🎁 ' + escHtml(p.title) + '</span><span style="color:var(--muted);">' + escHtml(p.date) + '</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز جایزه‌ای دریافت نکرده‌اید.</div>';
-  c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-top:10px;"><div style="font-size:17px;font-weight:900;">👤 ' + escHtml(currentUser.name) + '</div><div style="font-size:12px;color:#60a5fa;direction:ltr;text-align:right;margin-bottom:14px;">' + escHtml(currentUser.email) + '</div><div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;"><div style="font-size:11px;color:#94a3b8;">💰 موجودی جوایز و تسک‌ها (واریز هر جمعه):</div><div style="font-size:22px;font-weight:900;color:#10b981;margin-top:4px;">' + bal + ' تومان</div></div><div style="background:#131824;padding:12px;border-radius:14px;margin-bottom:14px;"><div style="font-size:12px;font-weight:900;color:#60a5fa;margin-bottom:8px;">💳 ثبت آدرس کیف پول (سولانا / اتریوم)</div><input id="inp-sol-wallet" class="inp" type="text" value="' + escHtml(currentUser.solWallet||'') + '" placeholder="آدرس کیف پول Solana..." style="direction:ltr;text-align:left;"><input id="inp-eth-wallet" class="inp" type="text" value="' + escHtml(currentUser.ethWallet||'') + '" placeholder="آدرس کیف پول Ethereum (0x)..." style="direction:ltr;text-align:left;"><button onclick="saveUserWallets()" class="spin-btn" style="width:100%;background:#10b981;">💾 ذخیره کیف پول در حساب</button></div><div style="font-size:13px;font-weight:900;margin-bottom:8px;">🏆 تاریخچه جوایز و پاداش‌ها:</div>' + hist + '<button onclick="switchAccount()" style="width:100%;background:#ef4444;color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-top:12px;cursor:pointer;">🚪 خروج / تغییر جیمیل</button></div>';
-}
+  
+  var savedHtml = savedDrops.length ? savedDrops.map(function(name){ return '<div style="background:#1e2433;padding:8px 12px;border-radius:10px;margin-bottom:6px;font-size:12px;color:#60a5fa;display:flex;justify-content:space-between;"><span>🪂 ' + escHtml(name) + '</span><span style="color:#10b981;">⭐ ذخیره شده</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز ایردراپی ذخیره نکرده‌اید.</div>';
 
+  c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-top:10px;"><div style="font-size:17px;font-weight:900;">👤 ' + escHtml(currentUser.name) + '</div><div style="font-size:12px;color:#60a5fa;direction:ltr;text-align:right;margin-bottom:14px;">' + escHtml(currentUser.email) + '</div><div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;"><div style="font-size:11px;color:#94a3b8;">💰 موجودی جوایز و تسک‌ها (واریز هر جمعه):</div><div style="font-size:22px;font-weight:900;color:#10b981;margin-top:4px;">' + bal + ' تومان</div></div><div style="background:#131824;padding:12px;border-radius:14px;margin-bottom:14px;"><div style="font-size:12px;font-weight:900;color:#60a5fa;margin-bottom:8px;">💳 ثبت آدرس کیف پول (سولانا / اتریوم)</div><input id="inp-sol-wallet" class="inp" type="text" value="' + escHtml(currentUser.solWallet||'') + '" placeholder="آدرس کیف پول Solana..." style="direction:ltr;text-align:left;"><input id="inp-eth-wallet" class="inp" type="text" value="' + escHtml(currentUser.ethWallet||'') + '" placeholder="آدرس کیف پول Ethereum (0x)..." style="direction:ltr;text-align:left;"><button onclick="saveUserWallets()" class="spin-btn" style="width:100%;background:#10b981;">💾 ذخیره کیف پول در حساب</button></div><div style="font-size:13px;font-weight:900;margin-bottom:8px;">⭐ ایردراپ‌های ذخیره شده:</div>' + savedHtml + '<div style="font-size:13px;font-weight:900;margin-top:14px;margin-bottom:8px;">🏆 تاریخچه جوایز و پاداش‌ها:</div>' + hist + '<button onclick="switchAccount()" style="width:100%;background:#ef4444;color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-top:12px;cursor:pointer;">🚪 خروج / تغییر جیمیل</button></div>';
+}
 function saveUserWallets() {
   if (!currentUser || currentUser.type !== 'google') return;
   currentUser.solWallet = document.getElementById('inp-sol-wallet').value.trim();
@@ -507,26 +512,23 @@ async function fetchMarket() {
   isFetchingMarket = true;
   fetchGlobalIndicators();
   var statusBadge = document.getElementById('market-status-badge');
-  var cached = safeJsonParse('cr_cached_coins', []);
-  if (cached.length && !coins.length) coins = cached;
-  if (!coins || coins.length === 0) {
-    coins = [
-      { id: 'btc', symbol: 'btc', name: 'Bitcoin', image: 'https://assets.coincap.io/assets/icons/btc@2x.png', current_price: 89420, price_change_percentage_24h: 3.42, market_cap_rank: 1, high_24h: 91000, low_24h: 87500 },
-      { id: 'eth', symbol: 'eth', name: 'Ethereum', image: 'https://assets.coincap.io/assets/icons/eth@2x.png', current_price: 3120, price_change_percentage_24h: 2.15, market_cap_rank: 2, high_24h: 3190, low_24h: 3040 },
-      { id: 'sol', symbol: 'sol', name: 'Solana', image: 'https://assets.coincap.io/assets/icons/sol@2x.png', current_price: 188.5, price_change_percentage_24h: 6.84, market_cap_rank: 3, high_24h: 194, low_24h: 176 },
-      { id: 'bnb', symbol: 'bnb', name: 'BNB', image: 'https://assets.coincap.io/assets/icons/bnb@2x.png', current_price: 642, price_change_percentage_24h: 1.12, market_cap_rank: 4, high_24h: 655, low_24h: 635 },
-      { id: 'xrp', symbol: 'xrp', name: 'XRP', image: 'https://assets.coincap.io/assets/icons/xrp@2x.png', current_price: 1.48, price_change_percentage_24h: -1.85, market_cap_rank: 5, high_24h: 1.55, low_24h: 1.44 },
-      { id: 'doge', symbol: 'doge', name: 'Dogecoin', image: 'https://assets.coincap.io/assets/icons/doge@2x.png', current_price: 0.365, price_change_percentage_24h: 8.40, market_cap_rank: 6, high_24h: 0.38, low_24h: 0.33 }
-    ];
-    if (statusBadge) { statusBadge.innerText = '● حالت کش'; statusBadge.style.color = '#eab308'; }
-  }
-  renderTopCards(); renderFullList(); updateGainersLosersPreview(); populateConverter(); updateLiveAutoUnlocks();
+  
   try {
-    var r = await fetch('https://min-api.cryptocompare.com/data/top/mktcapfull?limit=50&tsym=USD'), d = await r.json();
-    if (d && Array.isArray(d.Data) && d.Data.length > 0) {
-      coins = d.Data.map(function(item, idx) {
-        var info = item.CoinInfo || {}, raw = (item.RAW && item.RAW.USD) ? item.RAW.USD : {}, sym = (info.Name || 'btc').toLowerCase();
-        return { id: sym, symbol: sym, name: info.FullName || info.Name, image: 'https://assets.coincap.io/assets/icons/' + sym + '@2x.png', current_price: Number(raw.PRICE) || 1, price_change_percentage_24h: Number(raw.CHANGEPCT24HOUR) || 0, market_cap_rank: idx + 1, high_24h: Number(raw.HIGH24HOUR) || 1, low_24h: Number(raw.LOW24HOUR) || 1 };
+    var r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false');
+    var d = await r.json();
+    if (d && Array.isArray(d) && d.length > 0) {
+      coins = d.map(function(item) {
+        return {
+          id: item.id,
+          symbol: item.symbol.toLowerCase(),
+          name: item.name,
+          image: item.image,
+          current_price: Number(item.current_price) || 1,
+          price_change_percentage_24h: Number(item.price_change_percentage_24h) || 0,
+          market_cap_rank: item.market_cap_rank,
+          high_24h: Number(item.high_24h) || 1,
+          low_24h: Number(item.low_24h) || 1
+        };
       });
       localStorage.setItem('cr_cached_coins', JSON.stringify(coins));
       if (statusBadge) { statusBadge.innerText = '● آنلاین'; statusBadge.style.color = '#10b981'; }
@@ -536,7 +538,6 @@ async function fetchMarket() {
     if (statusBadge) { statusBadge.innerText = '● حالت کش'; statusBadge.style.color = '#eab308'; }
   } finally { isFetchingMarket = false; }
 }
-
 let lastRefreshClick = 0;
 function manualRefresh() {
   var now = Date.now();
