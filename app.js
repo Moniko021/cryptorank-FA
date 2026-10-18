@@ -5,7 +5,6 @@ let currentPage = 'home';
 let wheelDeg = 0;
 let isSpinning = false;
 let busyTasks = {};
-let userTaskSubmissions = {};
 let cloudDrops = [];
 let cloudTasks = [];
 let logoTapCount = 0;
@@ -32,11 +31,6 @@ let currentUser = safeJsonParse('cr_active_user', null);
 let savedGoogleAccount = safeJsonParse('cr_saved_google_user', null);
 let savedDrops = safeJsonParse('cr_user_saved_drops', []);
 
-const CR_EMAILJS_KEY = '8ajZprWhO5Ui9IvfD';
-const CR_EMAILJS_SERVICE = 'service_wgdnhlj';
-const CR_EMAILJS_TEMPLATE = 'template_f4xspnv';
-let crGeneratedOTP = null;
-let crPendingUser = null;
 let crUserUnsub = null;
 
 const CR_WHEEL_ITEMS = [
@@ -142,149 +136,108 @@ function updateSavedGoogleButtonUI() {
 }
 
 function initAuth() {
-  updateSavedGoogleButtonUI();
-  if (currentUser && currentUser.type === 'google' && currentUser.email) {
-    var vd = safeJsonParse(getVaultKey(currentUser.email), null);
-    if (vd && vd.sig === calcSig(currentUser.email, vd.balanceToman)) {
-      currentUser.balanceToman = Number(vd.balanceToman) || 0;
-      if (Array.isArray(vd.prizesList)) currentUser.prizesList = vd.prizesList;
-      if (Array.isArray(vd.completedTasks)) currentUser.completedTasks = vd.completedTasks;
-      if (vd.solWallet) currentUser.solWallet = vd.solWallet;
-      if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet;
-    } else { currentUser.balanceToman = 0; }
-    updateUserHeader(); loadUserFromCloud(currentUser.email); listenToUserSubmissions(); return;
-  }
-  var authModal = document.getElementById('auth-modal');
-  if (authModal && !currentUser) authModal.classList.add('show');
-  updateUserHeader();
-}
-
-function closeAuthModal() {
-  if (!currentUser) loginAnonymously();
-  else document.getElementById('auth-modal').classList.remove('show');
-}
-
-function quickGoogleLogin() {
-  if (!savedGoogleAccount || !savedGoogleAccount.email) return showGoogleForm();
-  currentUser = Object.assign({}, savedGoogleAccount);
-  savedDrops = safeJsonParse(getVaultKey(currentUser.email), {}).savedDrops || [];
-  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-  localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
-  document.getElementById('auth-modal').classList.remove('show');
-  initAuth(); renderLists(); renderProfilePage();
-}
-
-function showGoogleForm() {
-  document.getElementById('auth-main-btns').style.display = 'none';
-  document.getElementById('google-form').style.display = 'block';
-  if (savedGoogleAccount) {
-    var gn = document.getElementById('g-name'), ge = document.getElementById('g-email');
-    if (gn) gn.value = savedGoogleAccount.name || '';
-    if (ge) ge.value = savedGoogleAccount.email || '';
-  }
-}
-
-function hideGoogleForm() {
-  document.getElementById('google-form').style.display = 'none';
-  document.getElementById('auth-main-btns').style.display = 'block';
-  updateSavedGoogleButtonUI();
-}
-
-function resetOtpStep() {
-  document.getElementById('otp-step-1').style.display = 'block';
-  document.getElementById('otp-step-2').style.display = 'none';
-  document.getElementById('g-otp-code').value = '';
-}
-
-async function sendVerificationCode() {
-  var name = document.getElementById('g-name').value.trim();
-  var email = document.getElementById('g-email').value.trim().toLowerCase();
-  if (!name || !email || !email.includes('@')) return alert('لطفاً نام و آدرس جیمیل معتبر وارد کنید.');
-  var lastOtp = Number(sessionStorage.getItem('cr_otp_ts') || 0);
-  if (Date.now() - lastOtp < 30000) return alert('⏳ لطفاً ۳۰ ثانیه صبر کنید.');
-
-  crGeneratedOTP = Math.floor(100000 + Math.random() * 900000).toString();
-  crPendingUser = { name: name, email: email };
-  var btn = document.getElementById('send-otp-btn');
-  btn.innerText = '⏳ در حال ارسال...'; btn.disabled = true;
-  try {
-    emailjs.init(CR_EMAILJS_KEY);
-    await emailjs.send(CR_EMAILJS_SERVICE, CR_EMAILJS_TEMPLATE, {
-      to_name: name, name: name, from_name: 'crypto4youFA', to_email: email, email: email,
-      otp_code: crGeneratedOTP, code: crGeneratedOTP, title: 'کد تایید: ' + crGeneratedOTP,
-      message: 'کد تایید ورود شما به crypto4youFA: ' + crGeneratedOTP
-    });
-    sessionStorage.setItem('cr_otp_ts', String(Date.now()));
-    document.getElementById('otp-step-1').style.display = 'none';
-    document.getElementById('otp-step-2').style.display = 'block';
-    document.getElementById('otp-email-preview').innerText = email;
-  } catch (err) { alert('خطا در ارسال ایمیل.'); }
-  finally { btn.innerText = '📨 ارسال کد تایید به جیمیل'; btn.disabled = false; }
-}
-
-async function verifyAndLogin() {
-  if (!crPendingUser || !crPendingUser.email) return resetOtpStep();
-  var code = document.getElementById('g-otp-code').value.trim();
-  if (!crGeneratedOTP || code !== crGeneratedOTP) return alert('❌ کد وارد شده اشتباه است!');
-  crGeneratedOTP = null;
-  var cleanEmail = crPendingUser.email.trim().toLowerCase();
-  var k = getDocKey(cleanEmail), vKey = getVaultKey(cleanEmail);
-  var bal = 0, pList = [], cTasks = [], solW = '', ethW = '', drops = [], lSpin = localStorage.getItem('cr_spin_' + k) || null;
-
-  var vd = safeJsonParse(vKey, null);
-  if (vd && vd.sig === calcSig(cleanEmail, vd.balanceToman)) {
-    bal = Number(vd.balanceToman) || 0;
-    if (Array.isArray(vd.prizesList)) pList = vd.prizesList;
-    if (Array.isArray(vd.completedTasks)) cTasks = vd.completedTasks;
-    solW = vd.solWallet || ''; ethW = vd.ethWallet || '';
-    if (Array.isArray(vd.savedDrops)) drops = vd.savedDrops;
-    if (vd.lastSpin) lSpin = String(vd.lastSpin);
-  }
-
-  if (typeof db !== 'undefined') {
-    try {
-      var doc = await db.collection("users").doc(k).get();
-      if (doc.exists) {
-        var d = doc.data();
-        bal = Number(d.balanceToman) || 0;
-        if (Array.isArray(d.prizesList)) pList = d.prizesList;
-        if (Array.isArray(d.completedTasks)) cTasks = d.completedTasks;
-        if (d.solWallet) solW = d.solWallet;
-        if (d.ethWallet) ethW = d.ethWallet;
-        if (Array.isArray(d.savedDrops)) drops = d.savedDrops;
-        if (d.lastSpin) lSpin = String(d.lastSpin);
+  firebase.auth().onAuthStateChanged(function(user) {
+    if (user) {
+      document.getElementById('auth-modal').classList.remove('show');
+      if (user.isAnonymous) {
+        currentUser = { uid: user.uid, type: 'anon', name: 'کاربر ناشناس', email: 'بدون ایمیل (حالت مهمان)', balanceToman: 0 };
+        savedDrops = [];
+        updateUserHeader(); renderLists();
+      } else {
+        currentUser = { uid: user.uid, type: 'google', name: user.displayName || user.email.split('@')[0], email: user.email };
+        loadUserFromCloud(user.uid, user.email);
+        updateUserHeader(); renderLists();
       }
-    } catch(err) {}
-  }
+    } else {
+      document.getElementById('auth-modal').classList.add('show');
+    }
+  });
+}
 
-  currentUser = { type: 'google', name: crPendingUser.name, email: cleanEmail, balanceToman: bal, prizesList: pList, completedTasks: cTasks, solWallet: solW, ethWallet: ethW, lastSpin: lSpin };
-  savedGoogleAccount = Object.assign({}, currentUser);
-  savedDrops = drops;
-  localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
-  if (lSpin) localStorage.setItem(getSpinKey(), lSpin);
-  saveToLocalVault(); syncUserToCloud(); loadUserFromCloud(cleanEmail); listenToUserSubmissions();
-  document.getElementById('auth-modal').classList.remove('show');
-  updateUserHeader(); renderLists(); listenToUserSubmissions(); renderProfilePage();
+function loginWithGoogle() {
+  var provider = new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(provider).catch(function(err) {
+    alert('خطا در ورود با گوگل: ' + err.message);
+  });
 }
 
 function loginAnonymously() {
-  if (crUserUnsub) { crUserUnsub(); crUserUnsub = null; }
-  currentUser = { type: 'anon', name: 'کاربر ناشناس', email: 'بدون ایمیل (حالت مهمان)', balanceToman: 0 };
-  savedDrops = [];
-  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
-  localStorage.setItem('cr_user_saved_drops', '[]');
-  document.getElementById('auth-modal').classList.remove('show');
-  updateUserHeader(); renderLists();
+  firebase.auth().signInAnonymously().catch(function(err) {
+    alert('خطا در ورود مهمان: ' + err.message);
+  });
 }
 
 function switchAccount() {
   closeModal();
   if (crUserUnsub) { crUserUnsub(); crUserUnsub = null; }
-  localStorage.removeItem('cr_active_user');
-  currentUser = null; savedDrops = [];
-  localStorage.setItem('cr_user_saved_drops', '[]');
-  hideGoogleForm(); resetOtpStep(); updateSavedGoogleButtonUI(); updateUserHeader();
-  document.getElementById('auth-modal').classList.add('show');
+  firebase.auth().signOut().then(function() {
+    currentUser = null; savedDrops = [];
+    localStorage.removeItem('cr_active_user');
+    localStorage.setItem('cr_user_saved_drops', '[]');
+  });
+}
+
+function loadUserFromCloud(uid, email) {
+  if (typeof db === 'undefined') return;
+  var docRef = db.collection("users").doc(uid);
+  var oldDocKey = getDocKey(email);
+
+  if (crUserUnsub) { crUserUnsub(); crUserUnsub = null; }
+  
+  docRef.get().then(function(doc) {
+    if (!doc.exists && oldDocKey !== uid) {
+      db.collection("users").doc(oldDocKey).get().then(function(oldDoc) {
+        if (oldDoc.exists) {
+          var oldData = oldDoc.data();
+          docRef.set(oldData).then(function() {
+            setupUserListener(docRef);
+          });
+        } else {
+          setupUserListener(docRef);
+        }
+      });
+    } else {
+      setupUserListener(docRef);
+    }
+  });
+}
+
+function setupUserListener(docRef) {
+  crUserUnsub = docRef.onSnapshot(function(doc) {
+    if (doc.exists && currentUser && currentUser.type === 'google') {
+      var d = doc.data();
+      currentUser.balanceToman = Number(d.balanceToman) || 0;
+      if (Array.isArray(d.prizesList)) currentUser.prizesList = d.prizesList;
+      if (Array.isArray(d.completedTasks)) currentUser.completedTasks = d.completedTasks;
+      currentUser.solWallet = d.solWallet || '';
+      currentUser.ethWallet = d.ethWallet || '';
+      if (Array.isArray(d.savedDrops)) { savedDrops = d.savedDrops; localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops)); }
+      if (d.lastSpin) { currentUser.lastSpin = String(d.lastSpin); localStorage.setItem(getSpinKey(), String(d.lastSpin)); }
+      
+      saveToLocalVault(); updateUserHeader(); renderProfilePage(); renderUserTasksBox(); renderProDrops();
+    }
+  });
+}
+
+function syncUserToCloud() {
+  if (currentUser && currentUser.type === 'google' && currentUser.uid) {
+    saveToLocalVault();
+    if (typeof db !== 'undefined') {
+      db.collection("users").doc(currentUser.uid).set({
+        name: currentUser.name, email: currentUser.email.trim().toLowerCase(),
+        balanceToman: Number(currentUser.balanceToman) || 0, 
+        prizesList: Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [],
+        completedTasks: Array.isArray(currentUser.completedTasks) ? currentUser.completedTasks : [],
+        solWallet: currentUser.solWallet || '', ethWallet: currentUser.ethWallet || '',
+        savedDrops: savedDrops || [], lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(function(){});
+    }
+  }
+}
+
+function getSpinKey() {
+  return (currentUser && (currentUser.uid || currentUser.email)) ? 'cr_spin_' + getDocKey(currentUser.uid || currentUser.email) : 'cr_spin_guest';
 }
 
 function updateUserHeader() {
@@ -401,95 +354,43 @@ function renderUserTasksBox() {
     box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:15px;font-weight:900;color:#fff;">🎯 تسک‌های پاداش نقدی</div><span class="badge" style="color:#eab308;">ویژه اعضا</span></div><div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">با انجام تسک‌های روزانه، پاداش نقدی مستقیم در حساب خود دریافت کنید. ابتدا با جیمیل وارد شوید.</div><button onclick="switchAccount()" class="spin-btn" style="width:100%;padding:10px;font-size:12px;">📧 ورود با جیمیل و فعال‌سازی تسک‌ها</button>';
     return;
   }
+  var doneList = Array.isArray(currentUser.completedTasks) ? currentUser.completedTasks : [];
   var tasksHtml = '';
   if (!cloudTasks || cloudTasks.length === 0) {
     tasksHtml = '<div style="background:#0b0e14;border:1px dashed #334155;border-radius:14px;padding:16px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">💰</div><div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:4px;">بخش تسک‌های نقدی فعال است</div><div style="font-size:11px;color:#94a3b8;line-height:1.7;">تسک‌های جدید به زودی قرار می‌گیرند.</div></div>';
   } else {
     tasksHtml = cloudTasks.map(function(t, idx) {
-      var tid = String(t.docId || t.id);
-      var sub = userTaskSubmissions[tid];
-      var isDone = (Array.isArray(currentUser.completedTasks) && currentUser.completedTasks.includes(tid));
-      
-      var actionHtml = '';
-      if (sub) {
-        if (sub.status === 'pending') {
-          actionHtml = '<span style="font-size:11px;color:#eab308;font-weight:bold;background:rgba(234,179,8,0.12);padding:6px 10px;border-radius:8px;">⏳ منتظر تایید</span>';
-        } else if (sub.status === 'approved' || isDone) {
-          actionHtml = '<span style="font-size:11px;color:#10b981;font-weight:bold;background:rgba(16,185,129,0.12);padding:6px 10px;border-radius:8px;">✅ انجام شد</span>';
-        } else if (sub.status === 'rejected') {
-          actionHtml = '<button onclick="openTaskModal(' + idx + ')" style="background:#f43f5e;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">❌ رد شد (تلاش مجدد)</button>';
-        }
-      } else {
-        actionHtml = '<button onclick="openTaskModal(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">انجام تسک 〈</button>';
-      }
-
-      return '<div style="background:#0b0e14;border:1px solid #1e2433;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:800;color:#fff;">🎯 ' + escHtml(t.title) + '</div><div style="font-size:11px;color:#10b981;margin-top:3px;">پاداش: +' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div></div>' + actionHtml + '</div>';
+      var tid = String(t.docId || t.id), isDone = doneList.includes(tid) || busyTasks[tid];
+      return '<div style="background:#0b0e14;border:1px solid #1e2433;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:800;color:#fff;">🎯 ' + escHtml(t.title) + '</div><div style="font-size:11px;color:#10b981;margin-top:3px;">پاداش: +' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div></div>' + (isDone ? '<span style="font-size:11px;color:#10b981;font-weight:bold;background:rgba(16,185,129,0.12);padding:6px 10px;border-radius:8px;">✅ انجام شد</span>' : '<button onclick="completeCashTaskByIdx(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">انجام تسک 〈</button>') + '</div>';
     }).join('');
   }
-  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2433;padding-bottom:10px;margin-bottom:12px;"><div><div style="font-size:15px;font-weight:900;color:#10b981;">🎯 تسک‌های پاداش نقدی (' + escHtml(currentUser.name) + ')</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">حساب: <span style="color:#60a5fa;direction:ltr;display:inline-block;">' + escHtml(currentUser.email) + '</span></div></div><span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;">' + Object.keys(userTaskSubmissions).length + ' ارسال‌شده</span></div>' + tasksHtml;
+  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2433;padding-bottom:10px;margin-bottom:12px;"><div><div style="font-size:15px;font-weight:900;color:#10b981;">🎯 تسک‌های پاداش نقدی (' + escHtml(currentUser.name) + ')</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">حساب: <span style="color:#60a5fa;direction:ltr;display:inline-block;">' + escHtml(currentUser.email) + '</span></div></div><span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;">' + doneList.length + ' انجام‌شده</span></div>' + tasksHtml;
 }
 
-function openTaskModal(idx) {
+function completeCashTaskByIdx(idx) {
+  if (!currentUser || currentUser.type !== 'google') return;
   var t = cloudTasks[idx];
   if (!t) return;
+  var taskId = String(t.docId || t.id);
+  if (!Array.isArray(currentUser.completedTasks)) currentUser.completedTasks = [];
+  if (currentUser.completedTasks.includes(taskId) || busyTasks[taskId]) return;
+  
+  if (!confirm('آیا شما واقعاً این تسک را انجام داده‌اید؟ (در صورت عدم انجام، اکانت شما مسدود خواهد شد)')) return;
+
+  busyTasks[taskId] = true;
+  currentUser.completedTasks.push(taskId);
+  renderUserTasksBox();
   var url = safeUrl(t.link);
-  var taskId = String(t.docId || t.id);
-  var existing = userTaskSubmissions[taskId];
+  if (url !== '#') window.open(url, '_blank');
+  var reward = Number(t.reward) || 0;
   
-  var html = '<h3 style="font-size:16px;font-weight:900;margin-bottom:12px;color:#fff;">🎯 ' + escHtml(t.title) + '</h3>';
-  html += '<div style="background:#0b0e14;padding:14px;border-radius:12px;margin-bottom:14px;font-size:13px;color:var(--muted);line-height:1.7;">لطفا با کلیک روی دکمه زیر وارد لینک تسک شوید. پس از انجام کامل تسک، مدرک خود (آیدی، نام کاربری یا اسکرین‌شات) را در کادر پایین وارد کنید.</div>';
-  html += '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="spin-btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:14px;background:#3b82f6;">🔗 ورود به لینک تسک</a>';
-  
-  if (existing && existing.status === 'rejected') {
-     html += '<div style="color:#f43f5e;font-size:12px;margin-bottom:10px;">مدرک قبلی شما توسط مدیر رد شد. لطفا دوباره و با دقت انجام دهید.</div>';
-  }
-  
-  html += '<div style="font-size:12px;color:#eab308;margin-bottom:6px;">مدرک انجام تسک (اجباری):</div>';
-  html += '<input id="task-proof-inp" class="inp" type="text" placeholder="مثال: @myusername یا آدرس ایمیل">';
-  html += '<button onclick="submitTaskProof(' + idx + ')" class="spin-btn" style="width:100%;background:#10b981;">📤 ارسال مدرک برای تایید مدیر</button>';
-  
-  document.getElementById('modal-body').innerHTML = html;
-  document.getElementById('modal').classList.add('show');
-}
-
-function submitTaskProof(idx) {
-  var t = cloudTasks[idx];
-  if (!t || !currentUser) return;
-  var proof = document.getElementById('task-proof-inp').value.trim();
-  if (!proof) return alert('لطفا مدرک خود را وارد کنید!');
-  
-  var taskId = String(t.docId || t.id);
-  var docId = 'sub_' + Date.now() + '_' + Math.floor(Math.random()*1000);
-  
-  if (typeof db !== 'undefined') {
-    db.collection('task_submissions').doc(docId).set({
-      email: currentUser.email,
-      name: currentUser.name,
-      taskId: taskId,
-      taskTitle: t.title,
-      reward: Number(t.reward) || 0,
-      proof: proof,
-      status: 'pending',
-      submittedAt: Date.now()
-    }).then(function() {
-      closeModal();
-      alert('✅ مدرک شما ثبت شد و در انتظار تایید مدیر است.');
-    }).catch(function(err) {
-      alert('خطا در ارسال: ' + err.message);
-    });
-  }
-}
-
-function listenToUserSubmissions() {
-  if (typeof db === 'undefined' || !currentUser || currentUser.type !== 'google') return;
-  db.collection('task_submissions').where('email', '==', currentUser.email).onSnapshot(function(snap) {
-    userTaskSubmissions = {};
-    snap.forEach(function(doc) {
-      var d = doc.data();
-      userTaskSubmissions[d.taskId] = d;
-    });
-    renderUserTasksBox();
-  });
+  setTimeout(function() {
+    currentUser.balanceToman = (Number(currentUser.balanceToman) || 0) + reward;
+    if (!Array.isArray(currentUser.prizesList)) currentUser.prizesList = [];
+    currentUser.prizesList.unshift({ title: 'تسک: ' + t.title + ' (' + reward.toLocaleString('fa-IR') + ' ت)', amount: reward, date: new Date().toLocaleDateString('fa-IR') });
+    syncUserToCloud(); renderUserTasksBox(); renderProfilePage();
+    alert('✅ تبریک! پاداش تسک (' + reward.toLocaleString('fa-IR') + ' تومان) اضافه شد.');
+  }, 3000);
 }
 function renderProfilePage() {
   var c = document.getElementById('profile-page-container');
