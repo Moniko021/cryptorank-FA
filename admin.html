@@ -48,6 +48,7 @@
       <div class="admin-tabs">
         <button class="tab-btn active" id="tb-drops" onclick="switchTab('drops')">🪂 مدیریت ایردراپ‌ها</button>
         <button class="tab-btn" id="tb-tasks" onclick="switchTab('tasks')">🎯 تسک‌های نقدی</button>
+        <button class="tab-btn" id="tb-verifications" onclick="switchTab('verifications')">📝 تایید تسک‌ها</button>
       </div>
 
       <div id="sec-drops" class="admin-sec active">
@@ -87,6 +88,11 @@
         </div>
         <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست تسک‌های فعال:</div>
         <div id="admin-tasks-list"></div>
+      </div>
+
+      <div id="sec-verifications" class="admin-sec">
+        <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست مدارک در انتظار تایید:</div>
+        <div id="admin-verifications-list"></div>
       </div>
 
       <div class="card" style="border:1px solid #10b981; margin-top:24px; background:#131722; padding:16px; border-radius:16px;">
@@ -150,7 +156,7 @@
     });
 
     function switchTab(tab) {
-      ['drops', 'tasks'].forEach(function(t) {
+      ['drops', 'tasks', 'verifications'].forEach(function(t) {
         document.getElementById('tb-' + t).classList.remove('active');
         document.getElementById('sec-' + t).classList.remove('active');
       });
@@ -162,6 +168,7 @@
       loadCloudDropsAdmin();
       loadCloudTasksAdmin();
       loadAdminUsers();
+      loadTaskVerifications();
     }
 
     function loadCloudDropsAdmin() {
@@ -362,6 +369,75 @@
           (bal > 0 ? '<button data-docid="' + escHtml(u.docId) + '" onclick="markUserPaidByBtn(this)" style="width:100%; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-weight:bold; font-size:11px; cursor:pointer;">✅ تسویه شد (صفر کردن موجودی)</button>' : '') +
         '</div>';
       }).join('');
+    }
+
+    
+    function loadTaskVerifications() {
+      db.collection("task_submissions").where("status", "==", "pending").onSnapshot(function(snap) {
+        var container = document.getElementById('admin-verifications-list');
+        if (!container) return;
+        if (snap.empty) {
+          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ مدرکی در انتظار تایید نیست.</div>';
+          return;
+        }
+        var html = '';
+        snap.forEach(function(doc) {
+          var d = doc.data();
+          html += '<div class="item-row" style="flex-direction:column; align-items:flex-start; gap:10px;">' +
+            '<div style="width:100%; display:flex; justify-content:space-between;">' +
+              '<div><b>' + escHtml(d.name) + '</b> <span style="font-size:10px; color:#60a5fa; direction:ltr;">(' + escHtml(d.email) + ')</span></div>' +
+              '<span style="color:#10b981; font-weight:bold;">+' + Number(d.reward).toLocaleString('fa-IR') + ' ت</span>' +
+            '</div>' +
+            '<div style="font-size:12px; color:var(--muted);">تسک: ' + escHtml(d.taskTitle) + '</div>' +
+            '<div style="background:#131722; padding:10px; border-radius:8px; width:100%; font-size:12px; color:#eab308;">مدرک کاربر: <b>' + escHtml(d.proof) + '</b></div>' +
+            '<div style="display:flex; gap:8px; width:100%; margin-top:4px;">' +
+              '<button onclick="approveTaskVerification(\'' + doc.id + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">✅ تایید و واریز جایزه</button>' +
+              '<button onclick="rejectTaskVerification(\'' + doc.id + '\')" style="flex:1; background:#f43f5e; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">❌ رد کردن</button>' +
+            '</div>' +
+          '</div>';
+        });
+        container.innerHTML = html;
+      });
+    }
+
+    function getDocKey(e) { return String(e || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_'); }
+
+    function approveTaskVerification(docId) {
+      if (!confirm('آیا مطمئن هستید؟ با این کار جایزه به حساب کاربر واریز می‌شود.')) return;
+      var sDoc = db.collection("task_submissions").doc(docId);
+      sDoc.get().then(function(doc) {
+        if (!doc.exists) return;
+        var data = doc.data();
+        
+        sDoc.update({ status: 'approved' }).then(function() {
+          var uDocId = getDocKey(data.email);
+          var uDoc = db.collection("users").doc(uDocId);
+          uDoc.get().then(function(uSnap) {
+            if (uSnap.exists) {
+              var uData = uSnap.data();
+              var newBal = (Number(uData.balanceToman) || 0) + Number(data.reward);
+              var pList = Array.isArray(uData.prizesList) ? uData.prizesList : [];
+              pList.unshift({ title: 'تسک تایید شده: ' + data.taskTitle, amount: Number(data.reward), date: new Date().toLocaleDateString('fa-IR') });
+              
+              var completed = Array.isArray(uData.completedTasks) ? uData.completedTasks : [];
+              if (!completed.includes(data.taskId)) completed.push(data.taskId);
+
+              uDoc.update({ balanceToman: newBal, prizesList: pList, completedTasks: completed }).then(function() {
+                alert('✅ تایید شد و جایزه به موجودی کاربر اضافه گردید.');
+              });
+            } else {
+              alert('کاربر در دیتابیس یافت نشد!');
+            }
+          });
+        });
+      });
+    }
+
+    function rejectTaskVerification(docId) {
+      if (!confirm('آیا مدرک رد شود؟ کاربر می‌تواند دوباره تلاش کند.')) return;
+      db.collection("task_submissions").doc(docId).update({ status: 'rejected' }).then(function() {
+        alert('مدرک رد شد.');
+      });
     }
 
     function loadAdminUsers() {

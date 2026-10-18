@@ -5,6 +5,7 @@ let currentPage = 'home';
 let wheelDeg = 0;
 let isSpinning = false;
 let busyTasks = {};
+let userTaskSubmissions = {};
 let cloudDrops = [];
 let cloudTasks = [];
 let logoTapCount = 0;
@@ -151,7 +152,7 @@ function initAuth() {
       if (vd.solWallet) currentUser.solWallet = vd.solWallet;
       if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet;
     } else { currentUser.balanceToman = 0; }
-    updateUserHeader(); loadUserFromCloud(currentUser.email); return;
+    updateUserHeader(); loadUserFromCloud(currentUser.email); listenToUserSubmissions(); return;
   }
   var authModal = document.getElementById('auth-modal');
   if (authModal && !currentUser) authModal.classList.add('show');
@@ -261,9 +262,9 @@ async function verifyAndLogin() {
   savedDrops = drops;
   localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
   if (lSpin) localStorage.setItem(getSpinKey(), lSpin);
-  saveToLocalVault(); syncUserToCloud(); loadUserFromCloud(cleanEmail);
+  saveToLocalVault(); syncUserToCloud(); loadUserFromCloud(cleanEmail); listenToUserSubmissions();
   document.getElementById('auth-modal').classList.remove('show');
-  updateUserHeader(); renderLists(); renderProfilePage();
+  updateUserHeader(); renderLists(); listenToUserSubmissions(); renderProfilePage();
 }
 
 function loginAnonymously() {
@@ -400,43 +401,95 @@ function renderUserTasksBox() {
     box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:15px;font-weight:900;color:#fff;">🎯 تسک‌های پاداش نقدی</div><span class="badge" style="color:#eab308;">ویژه اعضا</span></div><div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">با انجام تسک‌های روزانه، پاداش نقدی مستقیم در حساب خود دریافت کنید. ابتدا با جیمیل وارد شوید.</div><button onclick="switchAccount()" class="spin-btn" style="width:100%;padding:10px;font-size:12px;">📧 ورود با جیمیل و فعال‌سازی تسک‌ها</button>';
     return;
   }
-  var doneList = Array.isArray(currentUser.completedTasks) ? currentUser.completedTasks : [];
   var tasksHtml = '';
   if (!cloudTasks || cloudTasks.length === 0) {
     tasksHtml = '<div style="background:#0b0e14;border:1px dashed #334155;border-radius:14px;padding:16px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">💰</div><div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:4px;">بخش تسک‌های نقدی فعال است</div><div style="font-size:11px;color:#94a3b8;line-height:1.7;">تسک‌های جدید به زودی قرار می‌گیرند.</div></div>';
   } else {
     tasksHtml = cloudTasks.map(function(t, idx) {
-      var tid = String(t.docId || t.id), isDone = doneList.includes(tid) || busyTasks[tid];
-      return '<div style="background:#0b0e14;border:1px solid #1e2433;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:800;color:#fff;">🎯 ' + escHtml(t.title) + '</div><div style="font-size:11px;color:#10b981;margin-top:3px;">پاداش: +' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div></div>' + (isDone ? '<span style="font-size:11px;color:#10b981;font-weight:bold;background:rgba(16,185,129,0.12);padding:6px 10px;border-radius:8px;">✅ انجام شد</span>' : '<button onclick="completeCashTaskByIdx(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">انجام تسک 〈</button>') + '</div>';
+      var tid = String(t.docId || t.id);
+      var sub = userTaskSubmissions[tid];
+      var isDone = (Array.isArray(currentUser.completedTasks) && currentUser.completedTasks.includes(tid));
+      
+      var actionHtml = '';
+      if (sub) {
+        if (sub.status === 'pending') {
+          actionHtml = '<span style="font-size:11px;color:#eab308;font-weight:bold;background:rgba(234,179,8,0.12);padding:6px 10px;border-radius:8px;">⏳ منتظر تایید</span>';
+        } else if (sub.status === 'approved' || isDone) {
+          actionHtml = '<span style="font-size:11px;color:#10b981;font-weight:bold;background:rgba(16,185,129,0.12);padding:6px 10px;border-radius:8px;">✅ انجام شد</span>';
+        } else if (sub.status === 'rejected') {
+          actionHtml = '<button onclick="openTaskModal(' + idx + ')" style="background:#f43f5e;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">❌ رد شد (تلاش مجدد)</button>';
+        }
+      } else {
+        actionHtml = '<button onclick="openTaskModal(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">انجام تسک 〈</button>';
+      }
+
+      return '<div style="background:#0b0e14;border:1px solid #1e2433;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:800;color:#fff;">🎯 ' + escHtml(t.title) + '</div><div style="font-size:11px;color:#10b981;margin-top:3px;">پاداش: +' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div></div>' + actionHtml + '</div>';
     }).join('');
   }
-  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2433;padding-bottom:10px;margin-bottom:12px;"><div><div style="font-size:15px;font-weight:900;color:#10b981;">🎯 تسک‌های پاداش نقدی (' + escHtml(currentUser.name) + ')</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">حساب: <span style="color:#60a5fa;direction:ltr;display:inline-block;">' + escHtml(currentUser.email) + '</span></div></div><span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;">' + doneList.length + ' انجام‌شده</span></div>' + tasksHtml;
+  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2433;padding-bottom:10px;margin-bottom:12px;"><div><div style="font-size:15px;font-weight:900;color:#10b981;">🎯 تسک‌های پاداش نقدی (' + escHtml(currentUser.name) + ')</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">حساب: <span style="color:#60a5fa;direction:ltr;display:inline-block;">' + escHtml(currentUser.email) + '</span></div></div><span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;">' + Object.keys(userTaskSubmissions).length + ' ارسال‌شده</span></div>' + tasksHtml;
 }
 
-function completeCashTaskByIdx(idx) {
-  if (!currentUser || currentUser.type !== 'google') return;
+function openTaskModal(idx) {
   var t = cloudTasks[idx];
   if (!t) return;
-  var taskId = String(t.docId || t.id);
-  if (!Array.isArray(currentUser.completedTasks)) currentUser.completedTasks = [];
-  if (currentUser.completedTasks.includes(taskId) || busyTasks[taskId]) return;
-  
-  if (!confirm('آیا شما واقعاً این تسک را انجام داده‌اید؟ (در صورت عدم انجام، اکانت شما مسدود خواهد شد)')) return;
-
-  busyTasks[taskId] = true;
-  currentUser.completedTasks.push(taskId);
-  renderUserTasksBox();
   var url = safeUrl(t.link);
-  if (url !== '#') window.open(url, '_blank');
-  var reward = Number(t.reward) || 0;
+  var taskId = String(t.docId || t.id);
+  var existing = userTaskSubmissions[taskId];
   
-  setTimeout(function() {
-    currentUser.balanceToman = (Number(currentUser.balanceToman) || 0) + reward;
-    if (!Array.isArray(currentUser.prizesList)) currentUser.prizesList = [];
-    currentUser.prizesList.unshift({ title: 'تسک: ' + t.title + ' (' + reward.toLocaleString('fa-IR') + ' ت)', amount: reward, date: new Date().toLocaleDateString('fa-IR') });
-    syncUserToCloud(); renderUserTasksBox(); renderProfilePage();
-    alert('✅ تبریک! پاداش تسک (' + reward.toLocaleString('fa-IR') + ' تومان) اضافه شد.');
-  }, 3000);
+  var html = '<h3 style="font-size:16px;font-weight:900;margin-bottom:12px;color:#fff;">🎯 ' + escHtml(t.title) + '</h3>';
+  html += '<div style="background:#0b0e14;padding:14px;border-radius:12px;margin-bottom:14px;font-size:13px;color:var(--muted);line-height:1.7;">لطفا با کلیک روی دکمه زیر وارد لینک تسک شوید. پس از انجام کامل تسک، مدرک خود (آیدی، نام کاربری یا اسکرین‌شات) را در کادر پایین وارد کنید.</div>';
+  html += '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="spin-btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:14px;background:#3b82f6;">🔗 ورود به لینک تسک</a>';
+  
+  if (existing && existing.status === 'rejected') {
+     html += '<div style="color:#f43f5e;font-size:12px;margin-bottom:10px;">مدرک قبلی شما توسط مدیر رد شد. لطفا دوباره و با دقت انجام دهید.</div>';
+  }
+  
+  html += '<div style="font-size:12px;color:#eab308;margin-bottom:6px;">مدرک انجام تسک (اجباری):</div>';
+  html += '<input id="task-proof-inp" class="inp" type="text" placeholder="مثال: @myusername یا آدرس ایمیل">';
+  html += '<button onclick="submitTaskProof(' + idx + ')" class="spin-btn" style="width:100%;background:#10b981;">📤 ارسال مدرک برای تایید مدیر</button>';
+  
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal').classList.add('show');
+}
+
+function submitTaskProof(idx) {
+  var t = cloudTasks[idx];
+  if (!t || !currentUser) return;
+  var proof = document.getElementById('task-proof-inp').value.trim();
+  if (!proof) return alert('لطفا مدرک خود را وارد کنید!');
+  
+  var taskId = String(t.docId || t.id);
+  var docId = 'sub_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+  
+  if (typeof db !== 'undefined') {
+    db.collection('task_submissions').doc(docId).set({
+      email: currentUser.email,
+      name: currentUser.name,
+      taskId: taskId,
+      taskTitle: t.title,
+      reward: Number(t.reward) || 0,
+      proof: proof,
+      status: 'pending',
+      submittedAt: Date.now()
+    }).then(function() {
+      closeModal();
+      alert('✅ مدرک شما ثبت شد و در انتظار تایید مدیر است.');
+    }).catch(function(err) {
+      alert('خطا در ارسال: ' + err.message);
+    });
+  }
+}
+
+function listenToUserSubmissions() {
+  if (typeof db === 'undefined' || !currentUser || currentUser.type !== 'google') return;
+  db.collection('task_submissions').where('email', '==', currentUser.email).onSnapshot(function(snap) {
+    userTaskSubmissions = {};
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      userTaskSubmissions[d.taskId] = d;
+    });
+    renderUserTasksBox();
+  });
 }
 function renderProfilePage() {
   var c = document.getElementById('profile-page-container');
