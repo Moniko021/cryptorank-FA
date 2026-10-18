@@ -459,12 +459,6 @@ function saveUserWallets() {
 let newsList = [];
 window.crCloudNews = [];
 window.crLiveApiNews = [];
-window.crMarketLiveNews = [];
-
-function fetchCloudData() {
-  if (typeof db === 'undefined') return;
-  db.collection("drops").onSnapshot(function(snap) {
-    cloudDrops = [];
     snap.forEach(function(doc) { cloudDrops.push(Object.assign({ docId: doc.id }, doc.data())); });
     renderProDrops();
   }, function(){});
@@ -629,10 +623,6 @@ function generateLiveMarketReports() {
   var sorted = [].concat(coins).sort(function(a, b) { return (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0); });
   var topGainer = sorted[0], fngEl = document.querySelector('.gauge-num'), fngVal = fngEl ? fngEl.innerText : '55';
   var nowTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
-  window.crMarketLiveNews = [
-    { id: 'mkt_btc', title: 'گزارش لحظه‌ای بازار: بیت‌کوین در محدوده $' + Number(btc.current_price).toLocaleString() + ' و شاخص ترس و طمع روی عدد ' + fngVal, source: 'نبض بازار (زنده)', time: 'ساعت ' + nowTime, desc: 'در معاملات ۲۴ ساعت گذشته، بیت‌کوین (BTC) در قیمت $' + Number(btc.current_price).toLocaleString() + ' معامله می‌شود و اتریوم (ETH) در سطح $' + Number(eth.current_price).toLocaleString() + ' قرار دارد.' },
-    { id: 'mkt_gainer', title: 'جهش قیمتی امروز: ارز ' + topGainer.name + ' (' + topGainer.symbol.toUpperCase() + ') با رشد +' + Number(topGainer.price_change_percentage_24h).toFixed(2) + '% صدرنشین بازار شد', source: 'رادار پامپ', time: 'به‌روزرسانی آنی', desc: 'رمزارز ' + topGainer.name + ' با ثبت قیمت $' + Number(topGainer.current_price).toLocaleString() + ' بیشترین بازدهی مثبت را در میان ارزهای برتر بازار به خود اختصاص داده است.' }
-  ];
   rebuildAllNews();
 }
 
