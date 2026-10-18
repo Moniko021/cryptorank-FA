@@ -20,6 +20,7 @@
   </style>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="firebase-config.js?v=2100"></script>
 </head>
 <body>
@@ -31,12 +32,19 @@
     </div>
 
     <div id="login-box">
-      <div style="font-size:13px; color:var(--muted); margin-bottom:12px;">لطفاً رمز عبور امنیتی مدیریت را وارد کنید:</div>
-      <input id="admin-pass" class="inp" type="password" placeholder="رمز عبور مدیریت..." style="direction:ltr; text-align:left;" onkeydown="if(event.key==='Enter')checkAdminLogin()">
+      <div style="font-size:13px; color:var(--muted); margin-bottom:12px;">ورود امن ادمین (با ایمیل و رمز ساخته شده در فایربیس):</div>
+      <input id="admin-email" class="inp" type="email" placeholder="ایمیل ادمین..." style="direction:ltr; text-align:left;">
+      <input id="admin-pass" class="inp" type="password" placeholder="رمز عبور..." style="direction:ltr; text-align:left;" onkeydown="if(event.key==='Enter')checkAdminLogin()">
       <button onclick="checkAdminLogin()" class="spin-btn" style="width:100%;">ورود به پنل مدیریت</button>
+      <div id="login-error" style="color:#f43f5e; font-size:12px; margin-top:10px; text-align:center;"></div>
     </div>
 
     <div id="panel-box" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div style="font-size:12px; color:#10b981;">✅ شما به عنوان ادمین وارد شده‌اید.</div>
+        <button onclick="logoutAdmin()" style="background:#ef4444; color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; cursor:pointer;">خروج</button>
+      </div>
+
       <div class="admin-tabs">
         <button class="tab-btn active" id="tb-drops" onclick="switchTab('drops')">🪂 مدیریت ایردراپ‌ها</button>
         <button class="tab-btn" id="tb-tasks" onclick="switchTab('tasks')">🎯 تسک‌های نقدی</button>
@@ -91,7 +99,6 @@
       </div>
     </div>
   </div>
-
   <script>
     var adminDropsCache = {};
     var adminUsersCache = {};
@@ -106,22 +113,41 @@
       return 'https://';
     }
 
-    async function sha256(str) {
-      var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-      return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+    function checkAdminLogin() {
+      var email = document.getElementById('admin-email').value.trim();
+      var pass = document.getElementById('admin-pass').value;
+      var errBox = document.getElementById('login-error');
+      errBox.innerText = '';
+      
+      if (!email || !pass) return errBox.innerText = 'ایمیل و رمز عبور را وارد کنید.';
+
+      firebase.auth().signInWithEmailAndPassword(email, pass)
+        .then(function(userCredential) {
+          document.getElementById('login-box').style.display = 'none';
+          document.getElementById('panel-box').style.display = 'block';
+          loadAllAdminData();
+        })
+        .catch(function(error) {
+          errBox.innerText = '⛔ خطا: ' + error.message;
+        });
     }
 
-    async function checkAdminLogin() {
-      var pass = document.getElementById('admin-pass').value;
-      var hash = await sha256(pass);
-      if (hash === '0e07d2f2403f5246f6e7d4785966c5690f74a2232c19109356e28b92266b43f7') {
+    function logoutAdmin() {
+      firebase.auth().signOut().then(function() {
+        window.location.reload();
+      });
+    }
+
+    firebase.auth().onAuthStateChanged(function(user) {
+      if (user) {
         document.getElementById('login-box').style.display = 'none';
         document.getElementById('panel-box').style.display = 'block';
         loadAllAdminData();
       } else {
-        alert('⛔ رمز عبور اشتباه است!');
+        document.getElementById('login-box').style.display = 'block';
+        document.getElementById('panel-box').style.display = 'none';
       }
-    }
+    });
 
     function switchTab(tab) {
       ['drops', 'tasks'].forEach(function(t) {
@@ -216,6 +242,8 @@
       prom.then(function() {
         alert(editId ? '✅ تغییرات ایردراپ ذخیره شد!' : '✅ ایردراپ جدید منتشر شد!');
         resetDropForm();
+      }).catch(function(err) {
+        alert('خطا در ذخیره: ' + err.message);
       });
     }
 
@@ -247,12 +275,16 @@
       }).then(function() {
         alert('✅ تسک جدید ثبت شد!');
         ['t-title','t-reward','t-link'].forEach(function(id) { document.getElementById(id).value = ''; });
+      }).catch(function(err) {
+        alert('خطا در ذخیره: ' + err.message);
       });
     }
 
     function deleteDoc(col, docId) {
       if (!confirm('آیا از حذف این مورد مطمئن هستید؟')) return;
-      db.collection(col).doc(docId).delete();
+      db.collection(col).doc(docId).delete().catch(function(err) {
+        alert('خطا در حذف: ' + err.message);
+      });
     }
 
     function copyWalletByBtn(btn) {
@@ -280,6 +312,8 @@
       }, { merge: true }).then(function() {
         alert('✅ موجودی کاربر با موفقیت صفر شد!');
         loadAdminUsers();
+      }).catch(function(err) {
+        alert('خطا: ' + err.message);
       });
     }
 
@@ -287,7 +321,7 @@
       var box = document.getElementById('users-admin-list');
       if (!box) return;
       if (!list || list.length === 0) {
-        box.innerHTML = '<div style="text-align:center; padding:14px; background:#0b0e14; border-radius:10px; color:#94a3b8;">هنوز هیچ کاربری با جیمیل ثبت‌نام نکرده است.</div>';
+        box.innerHTML = '<div style="text-align:center; padding:14px; background:#0b0e14; border-radius:10px; color:#94a3b8;">هنوز هیچ کاربری ثبت‌نام نکرده است.</div>';
         return;
       }
       list.sort(function(a, b) { return (Number(b.balanceToman) || 0) - (Number(a.balanceToman) || 0); });
@@ -350,8 +384,8 @@
           });
         });
         renderUsersHtml(list);
-      }).catch(function() {
-        box.innerHTML = '<div style="color:#f43f5e; padding:10px;">خطا در ارتباط با سرور.</div>';
+      }).catch(function(err) {
+        box.innerHTML = '<div style="color:#f43f5e; padding:10px;">خطا در ارتباط با سرور: ' + err.message + '</div>';
       });
     }
   </script>
