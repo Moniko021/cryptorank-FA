@@ -136,108 +136,151 @@ function updateSavedGoogleButtonUI() {
 }
 
 function initAuth() {
-  firebase.auth().onAuthStateChanged(function(user) {
-    if (user) {
-      document.getElementById('auth-modal').classList.remove('show');
-      if (user.isAnonymous) {
-        currentUser = { uid: user.uid, type: 'anon', name: 'کاربر ناشناس', email: 'بدون ایمیل (حالت مهمان)', balanceToman: 0 };
-        savedDrops = [];
-        updateUserHeader(); renderLists();
-      } else {
-        currentUser = { uid: user.uid, type: 'google', name: user.displayName || user.email.split('@')[0], email: user.email };
-        loadUserFromCloud(user.uid, user.email);
-        updateUserHeader(); renderLists();
-      }
-    } else {
-      document.getElementById('auth-modal').classList.add('show');
+  // ورود مخفی ناشناس برای اینکه دیتابیس قفل نباشد
+  firebase.auth().signInAnonymously().then(function() {
+    updateSavedGoogleButtonUI();
+    if (currentUser && currentUser.type === 'google' && currentUser.email) {
+      var vd = safeJsonParse(getVaultKey(currentUser.email), null);
+      if (vd && vd.sig === calcSig(currentUser.email, vd.balanceToman)) {
+        currentUser.balanceToman = Number(vd.balanceToman) || 0;
+        if (Array.isArray(vd.prizesList)) currentUser.prizesList = vd.prizesList;
+        if (Array.isArray(vd.completedTasks)) currentUser.completedTasks = vd.completedTasks;
+        if (vd.solWallet) currentUser.solWallet = vd.solWallet;
+        if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet;
+      } else { currentUser.balanceToman = 0; }
+      updateUserHeader(); listenToUserSubmissions(); return;
     }
+    var authModal = document.getElementById('auth-modal');
+    if (authModal && !currentUser) authModal.classList.add('show');
+    updateUserHeader();
   });
 }
 
-function loginWithGoogle() {
-  var provider = new firebase.auth.GoogleAuthProvider();
-  firebase.auth().signInWithPopup(provider).catch(function(err) {
-    alert('خطا در ورود با گوگل: ' + err.message);
-  });
+const CR_EMAILJS_KEY = '8ajZprWhO5Ui9IvfD';
+const CR_EMAILJS_SERVICE = 'service_wgdnhlj';
+const CR_EMAILJS_TEMPLATE = 'template_f4xspnv';
+let crGeneratedOTP = null;
+let crPendingUser = null;
+
+function updateSavedGoogleButtonUI() {
+  var savedBtn = document.getElementById('saved-google-btn'), savedTxt = document.getElementById('saved-google-txt');
+  if (savedBtn && savedTxt) {
+    if (savedGoogleAccount && savedGoogleAccount.email) {
+      savedBtn.style.display = 'flex';
+      savedTxt.innerText = 'ادامه با ' + savedGoogleAccount.name + ' (' + savedGoogleAccount.email + ')';
+    } else { savedBtn.style.display = 'none'; }
+  }
+}
+
+function quickGoogleLogin() {
+  if (!savedGoogleAccount || !savedGoogleAccount.email) return showGoogleForm();
+  currentUser = Object.assign({}, savedGoogleAccount);
+  savedDrops = safeJsonParse(getVaultKey(currentUser.email), {}).savedDrops || [];
+  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+  document.getElementById('auth-modal').classList.remove('show');
+  initAuth(); renderLists(); renderProfilePage();
+}
+
+function showGoogleForm() {
+  document.getElementById('auth-main-btns').style.display = 'none';
+  document.getElementById('google-form').style.display = 'block';
+  if (savedGoogleAccount) {
+    var gn = document.getElementById('g-name'), ge = document.getElementById('g-email');
+    if (gn) gn.value = savedGoogleAccount.name || '';
+    if (ge) ge.value = savedGoogleAccount.email || '';
+  }
+}
+
+function hideGoogleForm() {
+  document.getElementById('google-form').style.display = 'none';
+  document.getElementById('auth-main-btns').style.display = 'block';
+  updateSavedGoogleButtonUI();
+}
+
+function resetOtpStep() {
+  document.getElementById('otp-step-1').style.display = 'block';
+  document.getElementById('otp-step-2').style.display = 'none';
+  document.getElementById('g-otp-code').value = '';
+}
+
+async function sendVerificationCode() {
+  var name = document.getElementById('g-name').value.trim();
+  var email = document.getElementById('g-email').value.trim().toLowerCase();
+  if (!name || !email || !email.includes('@')) return alert('لطفاً نام و آدرس جیمیل معتبر وارد کنید.');
+  
+  crGeneratedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+  crPendingUser = { name: name, email: email };
+  var btn = document.getElementById('send-otp-btn');
+  btn.innerText = '⏳ در حال ارسال...'; btn.disabled = true;
+  try {
+    emailjs.init(CR_EMAILJS_KEY);
+    await emailjs.send(CR_EMAILJS_SERVICE, CR_EMAILJS_TEMPLATE, {
+      to_name: name, name: name, from_name: 'crypto4youFA', to_email: email, email: email,
+      otp_code: crGeneratedOTP, code: crGeneratedOTP, title: 'کد تایید: ' + crGeneratedOTP,
+      message: 'کد تایید ورود شما به crypto4youFA: ' + crGeneratedOTP
+    });
+    document.getElementById('otp-step-1').style.display = 'none';
+    document.getElementById('otp-step-2').style.display = 'block';
+    document.getElementById('otp-email-preview').innerText = email;
+  } catch (err) { 
+    alert('خطا در ارسال ایمیل. اما کد شما این است: ' + crGeneratedOTP); 
+    document.getElementById('otp-step-1').style.display = 'none';
+    document.getElementById('otp-step-2').style.display = 'block';
+    document.getElementById('otp-email-preview').innerText = email;
+  }
+  finally { btn.innerText = '📨 ارسال کد تایید به جیمیل'; btn.disabled = false; }
+}
+
+function verifyAndLogin() {
+  if (!crPendingUser || !crPendingUser.email) return resetOtpStep();
+  var code = document.getElementById('g-otp-code').value.trim();
+  if (!crGeneratedOTP || code !== crGeneratedOTP) return alert('❌ کد وارد شده اشتباه است!');
+  
+  var cleanEmail = crPendingUser.email.trim().toLowerCase();
+  var k = getDocKey(cleanEmail), vKey = getVaultKey(cleanEmail);
+  var bal = 0, pList = [], cTasks = [], solW = '', ethW = '', drops = [], lSpin = localStorage.getItem('cr_spin_' + k) || null;
+
+  var vd = safeJsonParse(vKey, null);
+  if (vd) {
+    bal = Number(vd.balanceToman) || 0;
+    if (Array.isArray(vd.prizesList)) pList = vd.prizesList;
+    if (Array.isArray(vd.completedTasks)) cTasks = vd.completedTasks;
+    solW = vd.solWallet || ''; ethW = vd.ethWallet || '';
+    if (Array.isArray(vd.savedDrops)) drops = vd.savedDrops;
+    if (vd.lastSpin) lSpin = String(vd.lastSpin);
+  }
+
+  currentUser = { type: 'google', name: crPendingUser.name, email: cleanEmail, balanceToman: bal, prizesList: pList, completedTasks: cTasks, solWallet: solW, ethWallet: ethW, lastSpin: lSpin };
+  savedGoogleAccount = Object.assign({}, currentUser);
+  savedDrops = drops;
+  localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
+  if (lSpin) localStorage.setItem(getSpinKey(), lSpin);
+  
+  saveToLocalVault(); 
+  document.getElementById('auth-modal').classList.remove('show');
+  updateUserHeader(); renderLists(); listenToUserSubmissions(); renderProfilePage();
 }
 
 function loginAnonymously() {
-  firebase.auth().signInAnonymously().catch(function(err) {
-    alert('خطا در ورود مهمان: ' + err.message);
-  });
+  currentUser = { type: 'anon', name: 'کاربر ناشناس', email: 'بدون ایمیل (حالت مهمان)', balanceToman: 0 };
+  savedDrops = [];
+  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+  document.getElementById('auth-modal').classList.remove('show');
+  updateUserHeader(); renderLists();
 }
 
 function switchAccount() {
   closeModal();
   if (crUserUnsub) { crUserUnsub(); crUserUnsub = null; }
-  firebase.auth().signOut().then(function() {
-    currentUser = null; savedDrops = [];
-    localStorage.removeItem('cr_active_user');
-    localStorage.setItem('cr_user_saved_drops', '[]');
-  });
-}
-
-function loadUserFromCloud(uid, email) {
-  if (typeof db === 'undefined') return;
-  var docRef = db.collection("users").doc(uid);
-  var oldDocKey = getDocKey(email);
-
-  if (crUserUnsub) { crUserUnsub(); crUserUnsub = null; }
-  
-  docRef.get().then(function(doc) {
-    if (!doc.exists && oldDocKey !== uid) {
-      db.collection("users").doc(oldDocKey).get().then(function(oldDoc) {
-        if (oldDoc.exists) {
-          var oldData = oldDoc.data();
-          docRef.set(oldData).then(function() {
-            setupUserListener(docRef);
-          });
-        } else {
-          setupUserListener(docRef);
-        }
-      });
-    } else {
-      setupUserListener(docRef);
-    }
-  });
-}
-
-function setupUserListener(docRef) {
-  crUserUnsub = docRef.onSnapshot(function(doc) {
-    if (doc.exists && currentUser && currentUser.type === 'google') {
-      var d = doc.data();
-      currentUser.balanceToman = Number(d.balanceToman) || 0;
-      if (Array.isArray(d.prizesList)) currentUser.prizesList = d.prizesList;
-      if (Array.isArray(d.completedTasks)) currentUser.completedTasks = d.completedTasks;
-      currentUser.solWallet = d.solWallet || '';
-      currentUser.ethWallet = d.ethWallet || '';
-      if (Array.isArray(d.savedDrops)) { savedDrops = d.savedDrops; localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops)); }
-      if (d.lastSpin) { currentUser.lastSpin = String(d.lastSpin); localStorage.setItem(getSpinKey(), String(d.lastSpin)); }
-      
-      saveToLocalVault(); updateUserHeader(); renderProfilePage(); renderUserTasksBox(); renderProDrops();
-    }
-  });
-}
-
-function syncUserToCloud() {
-  if (currentUser && currentUser.type === 'google' && currentUser.uid) {
-    saveToLocalVault();
-    if (typeof db !== 'undefined') {
-      db.collection("users").doc(currentUser.uid).set({
-        name: currentUser.name, email: currentUser.email.trim().toLowerCase(),
-        balanceToman: Number(currentUser.balanceToman) || 0, 
-        prizesList: Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [],
-        completedTasks: Array.isArray(currentUser.completedTasks) ? currentUser.completedTasks : [],
-        solWallet: currentUser.solWallet || '', ethWallet: currentUser.ethWallet || '',
-        savedDrops: savedDrops || [], lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
-        updatedAt: new Date().toISOString()
-      }, { merge: true }).catch(function(){});
-    }
-  }
+  localStorage.removeItem('cr_active_user');
+  currentUser = null; savedDrops = [];
+  localStorage.setItem('cr_user_saved_drops', '[]');
+  hideGoogleForm(); resetOtpStep(); updateSavedGoogleButtonUI(); updateUserHeader();
+  document.getElementById('auth-modal').classList.add('show');
 }
 
 function getSpinKey() {
-  return (currentUser && (currentUser.uid || currentUser.email)) ? 'cr_spin_' + getDocKey(currentUser.uid || currentUser.email) : 'cr_spin_guest';
+  return (currentUser && currentUser.type === 'google' && currentUser.email) ? 'cr_spin_' + getDocKey(currentUser.email) : 'cr_spin_guest';
 }
 
 function updateUserHeader() {
