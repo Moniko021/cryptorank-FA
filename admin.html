@@ -49,6 +49,7 @@
         <button class="tab-btn active" id="tb-drops" onclick="switchTab('drops')">🪂 مدیریت ایردراپ‌ها</button>
         <button class="tab-btn" id="tb-tasks" onclick="switchTab('tasks')">🎯 تسک‌های نقدی</button>
         <button class="tab-btn" id="tb-verifications" onclick="switchTab('verifications')">📝 تایید تسک‌ها</button>
+        <button class="tab-btn" id="tb-referrals" onclick="switchTab('referrals')">🤝 مدیریت دعوت‌ها</button>
       </div>
 
       <div id="sec-drops" class="admin-sec active">
@@ -93,6 +94,11 @@
       <div id="sec-verifications" class="admin-sec">
         <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست مدارک در انتظار تایید:</div>
         <div id="admin-verifications-list"></div>
+      </div>
+
+      <div id="sec-referrals" class="admin-sec">
+        <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست کاربران دعوت‌شده (دسته‌بندی شده):</div>
+        <div id="admin-referrals-list"></div>
       </div>
 
       <div class="card" style="border:1px solid #10b981; margin-top:24px; background:#131722; padding:16px; border-radius:16px;">
@@ -156,7 +162,7 @@
     });
 
     function switchTab(tab) {
-      ['drops', 'tasks', 'verifications'].forEach(function(t) {
+      ['drops', 'tasks', 'verifications', 'referrals'].forEach(function(t) {
         document.getElementById('tb-' + t).classList.remove('active');
         document.getElementById('sec-' + t).classList.remove('active');
       });
@@ -169,6 +175,7 @@
       loadCloudTasksAdmin();
       loadAdminUsers();
       loadTaskVerifications();
+      loadReferrals();
     }
 
     function loadCloudDropsAdmin() {

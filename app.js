@@ -155,7 +155,11 @@ function initAuth() {
         if (vd.solWallet) currentUser.solWallet = vd.solWallet;
         if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet;
       } else { currentUser.balanceToman = 0; }
-      updateUserHeader(); listenToUserSubmissions(); return;
+      updateUserHeader(); listenToUserSubmissions(); 
+      if (!currentUser.userIP) {
+        fetchUserIP().then(function(ip) { if(ip && ip !== 'نامشخص') { currentUser.userIP = ip; syncUserToCloud(); } });
+      }
+      return;
     }
     var authModal = document.getElementById('auth-modal');
     if (authModal && !currentUser) authModal.classList.add('show');
@@ -212,7 +216,7 @@ function resetOtpStep() {
 
 async function fetchUserIP() {
   try {
-    var res = await fetch('https://api.ipify.org?format=json');
+    var res = await fetch('https://ipapi.co/json/');
     var data = await res.json();
     return data.ip || 'نامشخص';
   } catch (e) { return 'نامشخص'; }
@@ -465,8 +469,47 @@ function renderProfilePage() {
   
   var savedHtml = savedDrops.length ? savedDrops.map(function(name){ return '<div style="background:#1e2433;padding:8px 12px;border-radius:10px;margin-bottom:6px;font-size:12px;color:#60a5fa;display:flex;justify-content:space-between;"><span>🪂 ' + escHtml(name) + '</span><span style="color:#10b981;">⭐ ذخیره شده</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز ایردراپی ذخیره نکرده‌اید.</div>';
 
-  c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-top:10px;"><div style="font-size:17px;font-weight:900;">👤 ' + escHtml(currentUser.name) + '</div><div style="font-size:12px;color:#60a5fa;direction:ltr;text-align:right;margin-bottom:14px;">' + escHtml(currentUser.email) + '</div><div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;"><div style="font-size:11px;color:#94a3b8;">💰 موجودی جوایز و تسک‌ها (واریز هر جمعه):</div><div style="font-size:22px;font-weight:900;color:#10b981;margin-top:4px;">' + bal + ' تومان</div></div><div style="background:#131824;padding:12px;border-radius:14px;margin-bottom:14px;"><div style="font-size:12px;font-weight:900;color:#60a5fa;margin-bottom:8px;">💳 ثبت آدرس کیف پول (سولانا / اتریوم)</div><input id="inp-sol-wallet" class="inp" type="text" value="' + escHtml(currentUser.solWallet||'') + '" placeholder="آدرس کیف پول Solana..." style="direction:ltr;text-align:left;"><input id="inp-eth-wallet" class="inp" type="text" value="' + escHtml(currentUser.ethWallet||'') + '" placeholder="آدرس کیف پول Ethereum (0x)..." style="direction:ltr;text-align:left;"><button onclick="saveUserWallets()" class="spin-btn" style="width:100%;background:#10b981;">💾 ذخیره کیف پول در حساب</button></div><div style="font-size:13px;font-weight:900;margin-bottom:8px;">⭐ ایردراپ‌های ذخیره شده:</div>' + savedHtml + '<div style="font-size:13px;font-weight:900;margin-top:14px;margin-bottom:8px;">🏆 تاریخچه جوایز و پاداش‌ها:</div>' + hist + '<button onclick="switchAccount()" style="width:100%;background:#ef4444;color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-top:12px;cursor:pointer;">🚪 خروج / تغییر جیمیل</button></div>';
+  var refLink = 'https://crypto4youfa.com/?ref=' + encodeURIComponent(currentUser.email);
+  var referralHtml = '<div style="background:#131824;border:1px solid #334155;padding:14px;border-radius:14px;margin-bottom:14px;">' +
+      '<div style="font-size:13px;font-weight:900;color:#eab308;margin-bottom:8px;">🎁 دعوت از دوستان (۱۰,۰۰۰ تومان هدیه)</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6;">لینک زیر را برای دوستان خود بفرستید. به ازای هر ثبت‌نام موفق و واقعی که توسط مدیر تایید شود، ۱۰ هزار تومان هدیه بگیرید.</div>' +
+      '<input type="text" value="' + refLink + '" readonly style="width:100%;background:#0b0e14;border:1px solid #3b82f6;color:#60a5fa;padding:10px;border-radius:8px;font-size:11px;margin-bottom:8px;direction:ltr;text-align:left;" id="ref-link-inp">' +
+      '<button onclick="copyRefLink()" style="width:100%;background:#3b82f6;color:#fff;border:none;padding:10px;border-radius:8px;font-weight:bold;cursor:pointer;margin-bottom:10px;">📋 کپی لینک دعوت</button>' +
+      '<div id="user-referrals-list" style="font-size:11px;color:var(--muted);line-height:1.8;"></div>' +
+    '</div>';
+
+  c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-top:10px;"><div style="font-size:17px;font-weight:900;">👤 ' + escHtml(currentUser.name) + '</div><div style="font-size:12px;color:#60a5fa;direction:ltr;text-align:right;margin-bottom:14px;">' + escHtml(currentUser.email) + '</div><div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;"><div style="font-size:11px;color:#94a3b8;">💰 موجودی جوایز و تسک‌ها (واریز هر جمعه):</div><div style="font-size:22px;font-weight:900;color:#10b981;margin-top:4px;">' + bal + ' تومان</div></div>' + referralHtml + '<div style="background:#131824;padding:12px;border-radius:14px;margin-bottom:14px;"><div style="font-size:12px;font-weight:900;color:#60a5fa;margin-bottom:8px;">💳 ثبت آدرس کیف پول (سولانا / اتریوم)</div><input id="inp-sol-wallet" class="inp" type="text" value="' + escHtml(currentUser.solWallet||'') + '" placeholder="آدرس کیف پول Solana..." style="direction:ltr;text-align:left;"><input id="inp-eth-wallet" class="inp" type="text" value="' + escHtml(currentUser.ethWallet||'') + '" placeholder="آدرس کیف پول Ethereum (0x)..." style="direction:ltr;text-align:left;"><button onclick="saveUserWallets()" class="spin-btn" style="width:100%;background:#10b981;">💾 ذخیره کیف پول در حساب</button></div><div style="font-size:13px;font-weight:900;margin-bottom:8px;">⭐ ایردراپ‌های ذخیره شده:</div>' + savedHtml + '<div style="font-size:13px;font-weight:900;margin-top:14px;margin-bottom:8px;">🏆 تاریخچه جوایز و پاداش‌ها:</div>' + hist + '<button onclick="switchAccount()" style="width:100%;background:#ef4444;color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-top:12px;cursor:pointer;">🚪 خروج / تغییر جیمیل</button></div>';
+  
+  loadReferredUsers();
 }
+
+function copyRefLink() {
+  var inp = document.getElementById('ref-link-inp');
+  if (!inp) return;
+  inp.select(); inp.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(inp.value).then(function() { alert('✅ لینک دعوت کپی شد!'); });
+}
+
+function loadReferredUsers() {
+  if (typeof db === 'undefined' || !currentUser || !currentUser.email) return;
+  var box = document.getElementById('user-referrals-list');
+  if (!box) return;
+  box.innerHTML = 'در حال دریافت لیست...';
+  db.collection('users').where('referredBy', '==', currentUser.email.toLowerCase()).get().then(function(snap) {
+    if (snap.empty) { box.innerHTML = 'هنوز کسی را دعوت نکرده‌اید.'; return; }
+    var html = '<div style="font-weight:bold;color:#fff;margin-bottom:6px;">لیست دعوت‌شده‌ها:</div>';
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      var status = d.referralStatus === 'approved' ? '✅ تایید شده (+۱۰,۰۰۰)' : (d.referralStatus === 'rejected' ? '❌ رد شده' : '⏳ در انتظار تایید');
+      var color = d.referralStatus === 'approved' ? '#10b981' : (d.referralStatus === 'rejected' ? '#f43f5e' : '#eab308');
+      html += '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:6px 8px;border-radius:6px;margin-bottom:4px;"><span style="direction:ltr;">' + escHtml(d.email || doc.id) + '</span><span style="color:' + color + ';font-weight:bold;">' + status + '</span></div>';
+    });
+    box.innerHTML = html;
+  });
+}
+
+function saveUserWallets() {
+
 function saveUserWallets() {
   if (!currentUser || currentUser.type !== 'google') return;
   currentUser.solWallet = document.getElementById('inp-sol-wallet').value.trim();
