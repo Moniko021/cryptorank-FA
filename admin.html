@@ -387,72 +387,121 @@
           container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ مدرکی در انتظار تایید نیست.</div>';
           return;
         }
-        
         var html = '';
         snap.forEach(function(doc) {
           var d = doc.data();
-          var hasWallet = (d.solWallet && d.solWallet.length > 5) || (d.ethWallet && d.ethWallet.length > 5);
-          var walletBadge = hasWallet ? '<span style="color:#10b981;font-size:11px;">💳 کیف پول متصل</span>' : '<span style="color:#f43f5e;font-size:11px;">❌ بدون کیف پول</span>';
-          var ipTxt = d.userIP ? d.userIP : 'نامشخص';
-          
           html += '<div class="item-row" style="flex-direction:column; align-items:flex-start; gap:10px;">' +
             '<div style="width:100%; display:flex; justify-content:space-between;">' +
-              '<div><b>کاربر: </b> <span style="color:#60a5fa; direction:ltr;">' + escHtml(d.email) + '</span></div>' +
-              '<span style="color:#eab308; font-weight:bold;">۱۰,۰۰۰ تومان</span>' +
+              '<div><b>' + escHtml(d.name) + '</b> <span style="font-size:10px; color:#60a5fa; direction:ltr;">(' + escHtml(d.email) + ')</span></div>' +
+              '<span style="color:#10b981; font-weight:bold;">+' + Number(d.reward).toLocaleString('fa-IR') + ' ت</span>' +
             '</div>' +
-            '<div style="display:flex; justify-content:space-between; width:100%; font-size:12px; color:var(--muted);">' +
-              '<span>دعوت شده توسط: <b style="color:#fff; direction:ltr;">' + escHtml(d.referredBy) + '</b></span>' +
-              '<span>IP: <b style="color:#a855f7; direction:ltr;">' + escHtml(ipTxt) + '</b></span>' +
-            '</div>' +
-            '<div style="width:100%;">' + walletBadge + '</div>' +
+            '<div style="font-size:12px; color:var(--muted);">تسک: ' + escHtml(d.taskTitle) + '</div>' +
+            '<div style="background:#131722; padding:10px; border-radius:8px; width:100%; font-size:12px; color:#eab308;">مدرک کاربر: <b>' + escHtml(d.proof) + '</b></div>' +
             '<div style="display:flex; gap:8px; width:100%; margin-top:4px;">' +
-              '<button onclick="approveReferral(\'' + doc.id + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">✅ تایید و واریز جایزه</button>' +
-              '<button onclick="rejectReferral(\'' + doc.id + '\')" style="flex:1; background:#f43f5e; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">❌ رد کردن (تقلبی)</button>' +
+              '<button onclick="approveTaskVerification(\'' + doc.id + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">✅ تایید و واریز جایزه</button>' +
+              '<button onclick="rejectTaskVerification(\'' + doc.id + '\')" style="flex:1; background:#f43f5e; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">❌ رد کردن</button>' +
             '</div>' +
           '</div>';
         });
-
         container.innerHTML = html;
       });
     }
 
-    function getDocKey(e) { return String(e || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_'); }
+    function loadReferrals() {
+      var container = document.getElementById('admin-referrals-list');
+      if (!container) return;
+      container.innerHTML = '<div style="color:#eab308; padding:10px;">⏳ در حال دریافت لیست...</div>';
+      
+      db.collection("users").get().then(function(snap) {
+        var groups = {};
+        snap.forEach(function(doc) {
+          var d = doc.data();
+          if (d.referredBy) {
+            var ref = d.referredBy.toLowerCase();
+            if (!groups[ref]) groups[ref] = [];
+            groups[ref].push({ docId: doc.id, data: d });
+          }
+        });
+        
+        var keys = Object.keys(groups);
+        if (keys.length === 0) { container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ دعوتی ثبت نشده است.</div>'; return; }
+        
+        var html = '';
+        keys.forEach(function(refEmail) {
+          var users = groups[refEmail];
+          html += '<div style="background:#0b0e14; border:1px solid #3b82f6; border-radius:14px; margin-bottom:12px; overflow:hidden;">';
+          html += '<div style="background:#1e293b; padding:10px 12px; font-weight:900; color:#60a5fa; display:flex; justify-content:space-between;">';
+          html += '<span>👤 دعوت‌کننده: <span style="direction:ltr;display:inline-block;">' + escHtml(refEmail) + '</span></span>';
+          html += '<span style="color:#eab308;">' + users.length + ' نفر</span>';
+          html += '</div><div style="padding:10px;">';
+          
+          users.forEach(function(u) {
+            var d = u.data;
+            var hasWallet = (d.solWallet && d.solWallet.length > 5) || (d.ethWallet && d.ethWallet.length > 5);
+            var walletBadge = hasWallet ? '<span style="color:#10b981;font-size:10px;">💳 کیف پول دارد</span>' : '<span style="color:#f43f5e;font-size:10px;">❌ بدون کیف پول</span>';
+            var ipTxt = d.userIP ? d.userIP : 'نامشخص';
+            var status = d.referralStatus;
+            var statusColor = status === 'approved' ? '#10b981' : (status === 'rejected' ? '#f43f5e' : '#eab308');
+            
+            html += '<div style="border-bottom:1px solid #222838; padding-bottom:8px; margin-bottom:8px;">';
+            html += '<div style="display:flex; justify-content:space-between; margin-bottom:4px;">';
+            html += '<span style="font-size:12px; color:#fff; direction:ltr;">' + escHtml(d.email || u.docId) + '</span>';
+            html += '<span style="font-size:10px; color:' + statusColor + '; font-weight:bold;">' + (status === 'approved' ? '✅ تایید شده' : status === 'rejected' ? '❌ رد شده' : '⏳ در انتظار') + '</span>';
+            html += '</div>';
+            html += '<div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-bottom:6px;">';
+            html += '<span>IP: <b style="color:#a855f7; direction:ltr;">' + escHtml(ipTxt) + '</b></span>';
+            html += '<span>' + walletBadge + '</span>';
+            html += '</div>';
+            
+            if (status !== 'approved' && status !== 'rejected') {
+              html += '<div style="display:flex; gap:6px;">';
+              html += '<button onclick="approveReferral(\'' + u.docId + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:6px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">✅ تایید (واریز به هر دو)</button>';
+              html += '<button onclick="rejectReferral(\'' + u.docId + '\')" style="flex:1; background:#f43f5e; color:#fff; border:none; padding:6px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">❌ رد تقلب</button>';
+              html += '</div>';
+            }
+            html += '</div>';
+          });
+          html += '</div></div>';
+        });
+        container.innerHTML = html;
+      });
+    }
 
-    function approveTaskVerification(docId) {
-      if (!confirm('آیا مطمئن هستید؟ با این کار جایزه به حساب کاربر واریز می‌شود.')) return;
-      var sDoc = db.collection("task_submissions").doc(docId);
-      sDoc.get().then(function(doc) {
+    function approveReferral(newUserId) {
+      if (!confirm('آیا این دعوت واقعی است؟ با این کار به هر دو نفر ۱۰,۰۰۰ تومان داده می‌شود.')) return;
+      var newUserDoc = db.collection("users").doc(newUserId);
+      newUserDoc.get().then(function(doc) {
         if (!doc.exists) return;
         var data = doc.data();
-        
-        sDoc.update({ status: 'approved' }).then(function() {
-          var uDocId = getDocKey(data.email);
-          var uDoc = db.collection("users").doc(uDocId);
-          uDoc.get().then(function(uSnap) {
-            if (uSnap.exists) {
-              var uData = uSnap.data();
-              var newBal = (Number(uData.balanceToman) || 0) + Number(data.reward);
-              var pList = Array.isArray(uData.prizesList) ? uData.prizesList : [];
-              pList.unshift({ title: 'تسک تایید شده: ' + data.taskTitle, amount: Number(data.reward), date: new Date().toLocaleDateString('fa-IR') });
-              
-              var completed = Array.isArray(uData.completedTasks) ? uData.completedTasks : [];
-              if (!completed.includes(data.taskId)) completed.push(data.taskId);
-
-              uDoc.update({ balanceToman: newBal, prizesList: pList, completedTasks: completed }).then(function() {
-                alert('✅ تایید شد و جایزه به موجودی کاربر اضافه گردید.');
+        var referrerEmail = data.referredBy;
+        if (!referrerEmail) return;
+        var referrerDoc = db.collection("users").doc(referrerEmail.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'));
+        referrerDoc.get().then(function(refSnap) {
+          if (refSnap.exists) {
+            var refData = refSnap.data();
+            var newRefBal = (Number(refData.balanceToman) || 0) + 10000;
+            var refPList = Array.isArray(refData.prizesList) ? refData.prizesList : [];
+            refPList.unshift({ title: 'هدیه دعوت از: ' + data.email, amount: 10000, date: new Date().toLocaleDateString('fa-IR') });
+            
+            referrerDoc.update({ balanceToman: newRefBal, prizesList: refPList }).then(function() {
+              var newUserBal = (Number(data.balanceToman) || 0) + 10000;
+              var newUserPList = Array.isArray(data.prizesList) ? data.prizesList : [];
+              newUserPList.unshift({ title: 'هدیه ثبت‌نام با لینک دعوت', amount: 10000, date: new Date().toLocaleDateString('fa-IR') });
+              newUserDoc.update({ balanceToman: newUserBal, prizesList: newUserPList, referralStatus: 'approved' }).then(function() {
+                alert('✅ هر دو نفر ۱۰,۰۰۰ تومان دریافت کردند.');
+                loadReferrals();
               });
-            } else {
-              alert('کاربر در دیتابیس یافت نشد!');
-            }
-          });
+            });
+          } else { alert('حساب دعوت‌کننده یافت نشد!'); }
         });
       });
     }
 
-    function rejectTaskVerification(docId) {
-      if (!confirm('آیا مدرک رد شود؟ کاربر می‌تواند دوباره تلاش کند.')) return;
-      db.collection("task_submissions").doc(docId).update({ status: 'rejected' }).then(function() {
-        alert('مدرک رد شد.');
+    function rejectReferral(newUserId) {
+      if (!confirm('آیا این دعوت جعلی است؟')) return;
+      db.collection("users").doc(newUserId).update({ referralStatus: 'rejected' }).then(function() {
+        alert('❌ دعوت رد شد.');
+        loadReferrals();
       });
     }
 
