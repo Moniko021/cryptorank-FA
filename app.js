@@ -511,7 +511,7 @@ async function fetchMarket() {
   var statusBadge = document.getElementById('market-status-badge');
   
   try {
-    var r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false');
+    var r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=true');
     var d = await r.json();
     if (d && Array.isArray(d) && d.length > 0) {
       coins = d.map(function(item) {
@@ -524,7 +524,8 @@ async function fetchMarket() {
           price_change_percentage_24h: Number(item.price_change_percentage_24h) || 0,
           market_cap_rank: item.market_cap_rank,
           high_24h: Number(item.high_24h) || 1,
-          low_24h: Number(item.low_24h) || 1
+          low_24h: Number(item.low_24h) || 1,
+          sparkline: item.sparkline_in_7d ? item.sparkline_in_7d.price : null
         };
       });
       localStorage.setItem('cr_cached_coins', JSON.stringify(coins));
@@ -540,7 +541,7 @@ function manualRefresh() {
   var now = Date.now();
   if (now - lastRefreshClick < 4000) return;
   lastRefreshClick = now;
-  document.getElementById('top-coins-cards').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px;">⏳ در حال آپدیت...</div>';
+  document.getElementById('top-coins-cards').innerHTML = '<div class="skeleton-card"><div class="skeleton-shimmer"></div></div><div class="skeleton-card"><div class="skeleton-shimmer"></div></div><div class="skeleton-card"><div class="skeleton-shimmer"></div></div>';
   fetchMarket(); fetchAndTranslateLiveNews();
 }
 
@@ -568,12 +569,33 @@ function openGainersLosersModal(type) {
   document.getElementById('modal').classList.add('show');
 }
 
+function generateSparklinePath(prices) {
+  if (!prices || prices.length === 0) return '';
+  var min = Math.min.apply(null, prices);
+  var max = Math.max.apply(null, prices);
+  var range = max - min || 1;
+  var width = 100, height = 35;
+  var points = prices.map(function(price, i) {
+    var x = (i / (prices.length - 1)) * width;
+    var y = height - ((price - min) / range) * height;
+    return x.toFixed(2) + ',' + y.toFixed(2);
+  });
+  return 'M' + points.join(' L');
+}
+
 function renderTopCards() {
   var top6 = coins.slice(0, 6);
   document.getElementById('top-coins-cards').innerHTML = top6.map(function(c) {
     var chg = c.price_change_percentage_24h || 0, isPos = chg >= 0, color = isPos ? '#10b981' : '#f43f5e';
-    var path = isPos ? 'M0,28 L20,24 L40,26 L60,15 L80,18 L100,6' : 'M0,8 L20,12 L40,10 L60,22 L80,20 L100,30';
-    return '<div class="tc-card" onclick="showCoinDetail(\'' + escHtml(c.id) + '\')"><div class="tc-head"><img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" alt=""><div class="tc-name">' + escHtml(c.name) + '</div></div><svg class="tc-spark" viewBox="0 0 100 35"><path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="2.5"/></svg><div class="tc-foot"><div class="tc-price">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</div><div class="tc-chg" style="color:' + color + '">' + (isPos?'+':'') + chg.toFixed(2) + '%</div></div></div>';
+    
+    var path = '';
+    if (c.sparkline && c.sparkline.length > 0) {
+      path = generateSparklinePath(c.sparkline);
+    } else {
+      path = 'M0,17 L100,17';
+    }
+    
+    return '<div class="tc-card" onclick="showCoinDetail(\'' + escHtml(c.id) + '\')"><div class="tc-head"><img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" alt=""><div class="tc-name">' + escHtml(c.name) + '</div></div><svg class="tc-spark" viewBox="0 0 100 35" preserveAspectRatio="none"><path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linecap="round"/></svg><div class="tc-foot"><div class="tc-price">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</div><div class="tc-chg" style="color:' + color + '">' + (isPos?'+':'') + chg.toFixed(2) + '%</div></div></div>';
   }).join('');
 }
 
