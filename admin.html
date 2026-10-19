@@ -380,22 +380,31 @@
           container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ مدرکی در انتظار تایید نیست.</div>';
           return;
         }
+        
         var html = '';
         snap.forEach(function(doc) {
           var d = doc.data();
+          var hasWallet = (d.solWallet && d.solWallet.length > 5) || (d.ethWallet && d.ethWallet.length > 5);
+          var walletBadge = hasWallet ? '<span style="color:#10b981;font-size:11px;">💳 کیف پول متصل</span>' : '<span style="color:#f43f5e;font-size:11px;">❌ بدون کیف پول</span>';
+          var ipTxt = d.userIP ? d.userIP : 'نامشخص';
+          
           html += '<div class="item-row" style="flex-direction:column; align-items:flex-start; gap:10px;">' +
             '<div style="width:100%; display:flex; justify-content:space-between;">' +
-              '<div><b>' + escHtml(d.name) + '</b> <span style="font-size:10px; color:#60a5fa; direction:ltr;">(' + escHtml(d.email) + ')</span></div>' +
-              '<span style="color:#10b981; font-weight:bold;">+' + Number(d.reward).toLocaleString('fa-IR') + ' ت</span>' +
+              '<div><b>کاربر: </b> <span style="color:#60a5fa; direction:ltr;">' + escHtml(d.email) + '</span></div>' +
+              '<span style="color:#eab308; font-weight:bold;">۱۰,۰۰۰ تومان</span>' +
             '</div>' +
-            '<div style="font-size:12px; color:var(--muted);">تسک: ' + escHtml(d.taskTitle) + '</div>' +
-            '<div style="background:#131722; padding:10px; border-radius:8px; width:100%; font-size:12px; color:#eab308;">مدرک کاربر: <b>' + escHtml(d.proof) + '</b></div>' +
+            '<div style="display:flex; justify-content:space-between; width:100%; font-size:12px; color:var(--muted);">' +
+              '<span>دعوت شده توسط: <b style="color:#fff; direction:ltr;">' + escHtml(d.referredBy) + '</b></span>' +
+              '<span>IP: <b style="color:#a855f7; direction:ltr;">' + escHtml(ipTxt) + '</b></span>' +
+            '</div>' +
+            '<div style="width:100%;">' + walletBadge + '</div>' +
             '<div style="display:flex; gap:8px; width:100%; margin-top:4px;">' +
-              '<button onclick="approveTaskVerification(\'' + doc.id + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">✅ تایید و واریز جایزه</button>' +
-              '<button onclick="rejectTaskVerification(\'' + doc.id + '\')" style="flex:1; background:#f43f5e; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">❌ رد کردن</button>' +
+              '<button onclick="approveReferral(\'' + doc.id + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">✅ تایید و واریز جایزه</button>' +
+              '<button onclick="rejectReferral(\'' + doc.id + '\')" style="flex:1; background:#f43f5e; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">❌ رد کردن (تقلبی)</button>' +
             '</div>' +
           '</div>';
         });
+
         container.innerHTML = html;
       });
     }

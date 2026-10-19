@@ -33,6 +33,13 @@ let savedDrops = safeJsonParse('cr_user_saved_drops', []);
 
 let crUserUnsub = null;
 
+
+const TEMP_EMAIL_DOMAINS = ['tempmail', '10minutemail', 'guerrillamail', 'yopmail', 'mailinator', 'dispostable', 'sharklasers', 'getnada', 'temp-mail', 'fakeinbox', 'maildrop'];
+function isTempEmail(email) {
+  var domain = String(email).split('@')[1] || '';
+  return TEMP_EMAIL_DOMAINS.some(function(bad) { return domain.includes(bad); });
+}
+
 const CR_WHEEL_ITEMS = [
   { idx: 0, short: '۱ میلیون',  label: '۱ میلیون تومان', amount: 1000000, weight: 0.1 },
   { idx: 1, short: '۸۰۰ هزار',  label: '۸۰۰ هزار تومان', amount: 800000,  weight: 0.1 },
@@ -203,10 +210,19 @@ function resetOtpStep() {
   document.getElementById('g-otp-code').value = '';
 }
 
+async function fetchUserIP() {
+  try {
+    var res = await fetch('https://api.ipify.org?format=json');
+    var data = await res.json();
+    return data.ip || 'نامشخص';
+  } catch (e) { return 'نامشخص'; }
+}
+
 async function sendVerificationCode() {
   var name = document.getElementById('g-name').value.trim();
   var email = document.getElementById('g-email').value.trim().toLowerCase();
   if (!name || !email || !email.includes('@')) return alert('لطفاً نام و آدرس جیمیل معتبر وارد کنید.');
+  if (isTempEmail(email)) return alert('⛔ استفاده از ایمیل‌های موقت (فیک) مجاز نیست. لطفاً از جیمیل اصلی خود استفاده کنید.');
   
   crGeneratedOTP = Math.floor(100000 + Math.random() * 900000).toString();
   crPendingUser = { name: name, email: email };
@@ -251,6 +267,7 @@ function verifyAndLogin() {
   }
 
   currentUser = { type: 'google', name: crPendingUser.name, email: cleanEmail, balanceToman: bal, prizesList: pList, completedTasks: cTasks, solWallet: solW, ethWallet: ethW, lastSpin: lSpin };
+  if (!currentUser.userIP) { fetchUserIP().then(function(ip) { currentUser.userIP = ip; syncUserToCloud(); }); }
   savedGoogleAccount = Object.assign({}, currentUser);
   savedDrops = drops;
   localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
