@@ -222,3 +222,41 @@ body::before {
   background-size: 250% !important; 
   background-position: right bottom !important; 
 }
+
+/* ==========================================
+   FIX SPLASH SCREEN (NO BOX + LOADER)
+   ========================================== */
+#cr-splash {
+  background: var(--bg) !important; /* هم‌رنگ با پس‌زمینه سایت */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.splash-img {
+  width: 85%;
+  max-width: 380px;
+  height: auto;
+  margin-bottom: 25px;
+  /* این خط جادویی پس‌زمینه تیره عکس رو محو میکنه */
+  mix-blend-mode: screen; 
+  animation: pulseLogo 2s infinite alternate;
+}
+
+/* بازگرداندن خط لودینگ */
+.splash-loader {
+  width: 180px !important;
+  height: 6px !important;
+  background: #1e2433 !important;
+  border-radius: 10px !important;
+  margin-top: 10px !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+.splash-bar {
+  width: 0%;
+  height: 100% !important;
+  background: linear-gradient(90deg, #3b82f6, #10b981) !important;
+  animation: loadBar 2s forwards ease-in-out !important;
+}
