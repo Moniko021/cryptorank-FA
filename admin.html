@@ -162,7 +162,7 @@
       document.getElementById('sec-' + tab).classList.add('active');
     }
 
-    function loadAllAdminData() {
+    function loadAllAdminData() { if (window.crAdminLoaded) return; window.crAdminLoaded = true;
       loadCloudDropsAdmin(); loadCloudTasksAdmin(); loadAdminUsers(); loadTaskVerifications(); loadReferrals();
     }
     function loadCloudDropsAdmin() {

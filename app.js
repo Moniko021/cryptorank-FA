@@ -1,4 +1,4 @@
-// === crypto4youFA - Hardened & Bug-Free Core (Part 1) ===
+// === crypto4youFA - Clean & Bug-Free Core ===
 let coins = [];
 let showFullCoins = false;
 let currentPage = 'home';
@@ -34,8 +34,6 @@ function safeUrl(u) {
   var s = String(u || '').trim();
   return /^https?:\/\//i.test(s) ? s : '#';
 }
-
-// استخراج ایمن کد دعوت (?ref=) از آدرس سایت (پشتیبانی از Base64 و ایمیل مستقیم)
 function parseReferralFromUrl() {
   try {
     var params = new URLSearchParams(window.location.search);
@@ -151,7 +149,6 @@ function loadUserFromCloud(email) {
     }
   }, function(){});
 }
-
 function listenToUserSubmissions() {
   if (typeof db === 'undefined' || !currentUser || currentUser.type !== 'google' || !currentUser.email) return;
   loadUserFromCloud(currentUser.email);
@@ -191,6 +188,7 @@ function initAuth() {
       if (decodedRefEmail && decodedRefEmail !== currentUser.email && !currentUser.referredBy && (!currentUser.balanceToman || currentUser.balanceToman === 0)) {
         currentUser.referredBy = decodedRefEmail.toLowerCase();
         currentUser.referralStatus = 'pending';
+        localStorage.removeItem('cr_pending_ref');
         syncUserToCloud();
       }
       updateUserHeader(); listenToUserSubmissions();
@@ -278,7 +276,6 @@ async function sendVerificationCode() {
     alert('خطا در ارسال ایمیل تایید. لطفاً اتصال اینترنت خود را بررسی کنید.');
   } finally { btn.innerText = '📨 ارسال کد تایید به جیمیل'; btn.disabled = false; }
 }
-
 async function verifyAndLogin() {
   if (!crPendingUser || !crPendingUser.email) return resetOtpStep();
   var code = document.getElementById('g-otp-code').value.trim();
@@ -321,6 +318,7 @@ async function verifyAndLogin() {
   if (decodedRefEmail && decodedRefEmail !== cleanEmail && !refBy && bal === 0) {
     refBy = decodedRefEmail.toLowerCase();
     refStat = 'pending';
+    localStorage.removeItem('cr_pending_ref');
   }
 
   currentUser = { type: 'google', name: crPendingUser.name, email: cleanEmail, balanceToman: bal, prizesList: pList, completedTasks: cTasks, solWallet: solW, ethWallet: ethW, lastSpin: lSpin, referredBy: refBy, referralStatus: refStat };
@@ -356,6 +354,7 @@ function switchAccount() {
   hideGoogleForm(); resetOtpStep(); updateSavedGoogleButtonUI(); updateUserHeader();
   document.getElementById('auth-modal').classList.add('show');
 }
+
 function updateUserHeader() {
   var avatarEl = document.getElementById('header-user-avatar'), nameEl = document.getElementById('header-user-name');
   if (!avatarEl || !nameEl) return;
@@ -384,60 +383,6 @@ function openPage(p) {
 
 function openProfileModal() { openPage('profile'); }
 function closeModal() { document.getElementById('modal').classList.remove('show'); }
-
-function setupWheelAndTasksDOM() {
-  var wheelSec = document.querySelector('.wheel-section');
-  if (!wheelSec || document.getElementById('wheel-8-done')) return;
-  var degs = [-67.5, -22.5, 22.5, 67.5, 112.5, 157.5, 202.5, 247.5];
-  var cols = ['#000', '#fff', '#fff', '#fff', '#cbd5e1', '#fff', '#fff', '#000'];
-  var slices = '';
-  for (var i = 0; i < 8; i++) {
-    var fSize = (i === 3) ? '18px' : '11px';
-    slices += '<div style="position:absolute;top:50%;left:50%;width:122px;height:24px;margin-top:-12px;transform-origin:0 50%;transform:rotate(' + degs[i] + 'deg);text-align:right;padding-right:12px;font-size:' + fSize + ';font-weight:900;color:' + cols[i] + ';direction:ltr;line-height:24px;">' + CR_WHEEL_ITEMS[i].short + '</div>';
-  }
-  wheelSec.innerHTML =
-    '<div id="wheel-8-done" style="font-size:17px;font-weight:900;color:#fff;">🎡 گردونه میلیونی روزانه</div>' +
-    '<div style="font-size:12px;color:var(--muted);margin-top:4px;">هر ۲۴ ساعت یک‌بار گردونه را بچرخانید و جایزه ببرید!</div>' +
-    '<div style="width:260px;height:260px;margin:18px auto;position:relative;">' +
-      '<div style="position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:28px;z-index:25;">🔻</div>' +
-      '<div id="wheel-el" style="width:100%;height:100%;border-radius:50%;position:relative;overflow:hidden;border:5px solid #2a324b;box-shadow:0 0 25px rgba(59,130,246,0.35);transition:transform 4s cubic-bezier(0.15, 0.85, 0.15, 1);background:conic-gradient(#eab308 0deg 45deg, #8b5cf6 45deg 90deg, #ec4899 90deg 135deg, #f97316 135deg 180deg, #334155 180deg 225deg, #10b981 225deg 270deg, #3b82f6 270deg 315deg, #06b6d4 315deg 360deg);">' +
-        slices +
-        '<div style="position:absolute;inset:0;margin:auto;width:46px;height:46px;background:#131722;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;z-index:10;">🎯</div>' +
-      '</div>' +
-    '</div>' +
-    '<button id="wheel-spin-btn" class="spin-btn" onclick="spinWheel()">🎯 چرخاندن گردونه شانس</button>' +
-    '<div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:12px;line-height:1.8;background:#0b0e14;padding:10px 12px;border-radius:12px;border:1px solid #1e2433;">جوایز در حساب کاربری ذخیره میشه هر جمعه به حساب کاربر ها واریز میشه جوایز میتونه نقدی یا به صورت ارز دیجیتال واریز بشه</div>' +
-
-cd ~/cryptorank && cat << 'EOF' >> app.js
-function updateUserHeader() {
-  var avatarEl = document.getElementById('header-user-avatar'), nameEl = document.getElementById('header-user-name');
-  if (!avatarEl || !nameEl) return;
-  if (currentUser && currentUser.type === 'google') {
-    avatarEl.innerText = currentUser.name.charAt(0).toUpperCase();
-    avatarEl.style.background = '#10b981'; nameEl.innerText = currentUser.name;
-  } else {
-    avatarEl.innerText = '🕶️'; avatarEl.style.background = '#3b82f6'; nameEl.innerText = 'ناشناس';
-  }
-  renderUserTasksBox();
-}
-
-function openPage(p) {
-  currentPage = p;
-  ['home','news','drops','vcs','unlocks','converter','profile'].forEach(function(x) {
-    var pg = document.getElementById('page-' + x), st = document.getElementById('st-' + x);
-    if (pg) pg.classList.remove('active');
-    if (st) st.classList.remove('active');
-  });
-  var targetPg = document.getElementById('page-' + p), activeSt = document.getElementById('st-' + p);
-  if (targetPg) targetPg.classList.add('active');
-  if (activeSt) activeSt.classList.add('active');
-  if (p === 'profile') renderProfilePage();
-  window.scrollTo(0, 0);
-}
-
-function openProfileModal() { openPage('profile'); }
-function closeModal() { document.getElementById('modal').classList.remove('show'); }
-
 function setupWheelAndTasksDOM() {
   var wheelSec = document.querySelector('.wheel-section');
   if (!wheelSec || document.getElementById('wheel-8-done')) return;
@@ -509,18 +454,28 @@ function spinWheel() {
     syncUserToCloud(); updateUserHeader(); renderProfilePage();
   }, 4100);
 }
-
 function renderUserTasksBox() {
   var box = document.getElementById('user-cash-tasks-box');
   if (!box) return;
   if (!currentUser || currentUser.type !== 'google') {
-    box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:15px;font-weight:900;color:#fff;">🎯 تسک‌های پاداش نقدی</div><span class="badge" style="color:#eab308;">ویژه اعضا</span></div><div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">با انجام تسک‌های روزانه، پاداش نقدی مستقیم در حساب خود دریافت کنید. ابتدا با جیمیل وارد شوید.</div><button onclick="switchAccount()" class="spin-btn" style="width:100%;padding:10px;font-size:12px;">📧 ورود با جیمیل و فعال‌سازی تسک‌ها</button>';
+    box.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div style="font-size:15px;font-weight:900;color:#fff;">🎯 تسک‌های پاداش نقدی</div>' +
+        '<span class="badge" style="color:#eab308;">ویژه اعضا</span>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">با انجام تسک‌های روزانه، پاداش نقدی مستقیم در حساب خود دریافت کنید. ابتدا با جیمیل وارد شوید.</div>' +
+      '<button onclick="switchAccount()" class="spin-btn" style="width:100%;padding:10px;font-size:12px;">📧 ورود با جیمیل و فعال‌سازی تسک‌ها</button>';
     return;
   }
   var doneList = Array.isArray(currentUser.completedTasks) ? currentUser.completedTasks : [];
   var tasksHtml = '';
   if (!cloudTasks || cloudTasks.length === 0) {
-    tasksHtml = '<div style="background:#0b0e14;border:1px dashed #334155;border-radius:14px;padding:16px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">💰</div><div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:4px;">بخش تسک‌های نقدی فعال است</div><div style="font-size:11px;color:#94a3b8;line-height:1.7;">تسک‌های جدید به زودی قرار می‌گیرند.</div></div>';
+    tasksHtml =
+      '<div style="background:#0b0e14;border:1px dashed #334155;border-radius:14px;padding:16px;text-align:center;">' +
+        '<div style="font-size:24px;margin-bottom:6px;">💰</div>' +
+        '<div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:4px;">بخش تسک‌های نقدی فعال است</div>' +
+        '<div style="font-size:11px;color:#94a3b8;line-height:1.7;">تسک‌های جدید به زودی قرار می‌گیرند.</div>' +
+      '</div>';
   } else {
     tasksHtml = cloudTasks.map(function(t, idx) {
       var tid = String(t.docId || t.id);
@@ -531,11 +486,20 @@ function renderUserTasksBox() {
         ? '<span style="font-size:11px;color:#10b981;font-weight:bold;background:rgba(16,185,129,0.12);padding:6px 10px;border-radius:8px;">✅ انجام شد</span>'
         : (isPending
             ? '<span style="font-size:11px;color:#eab308;font-weight:bold;background:rgba(234,179,8,0.12);padding:6px 10px;border-radius:8px;">⏳ در انتظار تایید</span>'
-            : '<button onclick="completeCashTaskByIdx(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">انجام تسک 〈</button>');
-      return '<div style="background:#0b0e14;border:1px solid #1e2433;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:800;color:#fff;">🎯 ' + escHtml(t.title) + '</div><div style="font-size:11px;color:#10b981;margin-top:3px;">پاداش: +' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div></div>' + btnHtml + '</div>';
+            : '<button onclick="completeCashTaskByIdx(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">' + (subStat === 'rejected' ? 'ارسال مجدد 〈' : 'انجام تسک 〈') + '</button>');
+      return '<div style="background:#0b0e14;border:1px solid #1e2433;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+        '<div><div style="font-size:13px;font-weight:800;color:#fff;">🎯 ' + escHtml(t.title) + '</div>' +
+        '<div style="font-size:11px;color:#10b981;margin-top:3px;">پاداش: +' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div></div>' +
+        btnHtml +
+      '</div>';
     }).join('');
   }
-  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2433;padding-bottom:10px;margin-bottom:12px;"><div><div style="font-size:15px;font-weight:900;color:#10b981;">🎯 تسک‌های پاداش نقدی (' + escHtml(currentUser.name) + ')</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">حساب: <span style="color:#60a5fa;direction:ltr;display:inline-block;">' + escHtml(currentUser.email) + '</span></div></div><span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;">' + doneList.length + ' انجام‌شده</span></div>' + tasksHtml;
+  box.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2433;padding-bottom:10px;margin-bottom:12px;">' +
+      '<div><div style="font-size:15px;font-weight:900;color:#10b981;">🎯 تسک‌های پاداش نقدی (' + escHtml(currentUser.name) + ')</div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-top:2px;">حساب: <span style="color:#60a5fa;direction:ltr;display:inline-block;">' + escHtml(currentUser.email) + '</span></div></div>' +
+      '<span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;">' + doneList.length + ' انجام‌شده</span>' +
+    '</div>' + tasksHtml;
 }
 
 function completeCashTaskByIdx(idx) {
@@ -561,18 +525,20 @@ function submitTaskProof(idx) {
   if (!t || !currentUser || currentUser.type !== 'google') return;
   var proofInp = document.getElementById('task-proof-inp');
   var proof = proofInp ? proofInp.value.trim() : '';
-  if (!proof) return alert('لطفاً مدرک انجام تسک (مثلاً آیدی یا نام کاربری خود) را وارد کنید.');
+  if (!proof) return alert('لطفاً مدرک انجام تسک را وارد کنید.');
   var taskId = String(t.docId || t.id);
   busyTasks[taskId] = true;
   userTaskSubmissions[taskId] = 'pending';
   closeModal(); renderUserTasksBox();
   if (typeof db !== 'undefined') {
-    db.collection("task_submissions").add({
+    var subDocId = getDocKey(currentUser.email) + '_' + getDocKey(taskId);
+    db.collection("task_submissions").doc(subDocId).set({
       taskId: taskId, taskTitle: t.title || 'تسک نقدی', reward: Number(t.reward) || 0,
       name: currentUser.name, email: currentUser.email.trim().toLowerCase(),
       proof: proof, status: 'pending', createdAt: new Date().toISOString()
     }).then(function() {
-      alert('✅ مدرک شما با موفقیت ثبت شد و پس از تایید مدیر، پاداش به موجودی شما اضافه می‌شود.');
+      busyTasks[taskId] = false;
+      alert('✅ مدرک شما ثبت شد و پس از تایید مدیر، پاداش به موجودی شما اضافه می‌شود.');
     }).catch(function(err) {
       busyTasks[taskId] = false;
       alert('خطا در ارسال مدرک: ' + err.message);
@@ -607,7 +573,8 @@ function renderProfilePage() {
     '</div>';
   }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز ایردراپی ذخیره نکرده‌اید.</div>';
 
-  var refCode = btoa(currentUser.email).replace(/=/g, '');
+  var refCode = '';
+  try { refCode = btoa(currentUser.email).replace(/=/g, ''); } catch (e) { refCode = encodeURIComponent(currentUser.email); }
   var refLink = 'https://crypto4youfa.com/?ref=' + refCode;
   var referralHtml =
     '<div style="background:#131824;border:1px solid #334155;padding:14px;border-radius:14px;margin-bottom:14px;">' +
@@ -645,9 +612,7 @@ function copyRefLink() {
   if (!inp) return;
   navigator.clipboard.writeText(inp.value).then(function() {
     alert('✅ لینک دعوت کپی شد!');
-  }).catch(function() {
-    prompt('کپی کنید:', inp.value);
-  });
+  }).catch(function() { prompt('کپی کنید:', inp.value); });
 }
 
 function loadReferredUsers() {
@@ -703,8 +668,7 @@ async function fetchGlobalIndicators() {
     var data = await res.json();
     if (data && data.data && data.data[0]) {
       var val = parseInt(data.data[0].value);
-      var numEl = document.querySelector('.gauge-num');
-      var lblEl = document.querySelector('.gauge-lbl');
+      var numEl = document.querySelector('.gauge-num'), lblEl = document.querySelector('.gauge-lbl');
       if (numEl) numEl.innerText = val;
       if (lblEl) {
         if (val >= 55) { lblEl.innerText = 'طمع (صعودی)'; lblEl.style.color = '#10b981'; }
@@ -714,12 +678,10 @@ async function fetchGlobalIndicators() {
     }
   } catch (err) {}
   try {
-    var resG = await fetch('https://api.coingecko.com/api/v3/global');
-    var dataG = await resG.json();
+    var resG = await fetch('https://api.coingecko.com/api/v3/global'), dataG = await resG.json();
     if (dataG && dataG.data && dataG.data.market_cap_percentage) {
       var btcDom = dataG.data.market_cap_percentage.btc;
-      var domEl = document.getElementById('btc-dom');
-      var chgEl = document.getElementById('btc-dom-chg');
+      var domEl = document.getElementById('btc-dom'), chgEl = document.getElementById('btc-dom-chg');
       if (domEl && btcDom) domEl.innerText = btcDom.toFixed(2) + '%';
       if (chgEl && dataG.data.market_cap_change_percentage_24h_usd !== undefined) {
         var mcChg = dataG.data.market_cap_change_percentage_24h_usd;
@@ -768,13 +730,9 @@ async function fetchMarket() {
     var d2 = await r2.json();
     if (d2 && Array.isArray(d2.Data) && d2.Data.length > 0) {
       coins = d2.Data.map(function(item, idx) {
-        var info = item.CoinInfo || {};
-        var raw = (item.RAW && item.RAW.USD) ? item.RAW.USD : {};
-        var sym = (info.Name || 'btc').toLowerCase();
-        var p = Number(raw.PRICE) || 1;
-        var l = Number(raw.LOW24HOUR) || p * 0.98;
-        var h = Number(raw.HIGH24HOUR) || p * 1.02;
-        var o = Number(raw.OPEN24HOUR) || p;
+        var info = item.CoinInfo || {}, raw = (item.RAW && item.RAW.USD) ? item.RAW.USD : {};
+        var sym = (info.Name || 'btc').toLowerCase(), p = Number(raw.PRICE) || 1;
+        var l = Number(raw.LOW24HOUR) || p * 0.98, h = Number(raw.HIGH24HOUR) || p * 1.02, o = Number(raw.OPEN24HOUR) || p;
         return {
           id: sym, symbol: sym, name: info.FullName || info.Name,
           image: 'https://assets.coincap.io/assets/icons/' + sym + '@2x.png',
@@ -800,8 +758,7 @@ function manualRefresh() {
     '<div class="skeleton-card"><div class="skeleton-shimmer"></div></div>' +
     '<div class="skeleton-card"><div class="skeleton-shimmer"></div></div>' +
     '<div class="skeleton-card"><div class="skeleton-shimmer"></div></div>';
-  fetchMarket();
-  fetchAndTranslateLiveNews();
+  fetchMarket(); fetchAndTranslateLiveNews();
 }
 const FALLBACK_COIN_ICON = "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2245%22 fill=%22%233b82f6%22/><text x=%2250%22 y=%2266%22 font-size=%2245%22 text-anchor=%22middle%22 fill=%22%23fff%22>₿</text></svg>";
 
@@ -811,8 +768,7 @@ function updateGainersLosersPreview() {
     return (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0);
   });
   var topGainer = sorted[0], topLoser = sorted[sorted.length - 1];
-  var gEl = document.getElementById('top-gainer-preview');
-  var lEl = document.getElementById('top-loser-preview');
+  var gEl = document.getElementById('top-gainer-preview'), lEl = document.getElementById('top-loser-preview');
   if (gEl && topGainer) gEl.innerText = topGainer.symbol.toUpperCase() + ': +' + (topGainer.price_change_percentage_24h || 0).toFixed(2) + '%';
   if (lEl && topLoser) lEl.innerText = topLoser.symbol.toUpperCase() + ': ' + (topLoser.price_change_percentage_24h || 0).toFixed(2) + '%';
   generateLiveMarketReports();
@@ -827,8 +783,7 @@ function openGainersLosersModal(type) {
       : (a.price_change_percentage_24h || 0) - (b.price_change_percentage_24h || 0);
   }).slice(0, 12);
   var rowsHtml = sorted.map(function(c, idx) {
-    var chg = c.price_change_percentage_24h || 0;
-    var color = chg >= 0 ? '#10b981' : '#f43f5e';
+    var chg = c.price_change_percentage_24h || 0, color = chg >= 0 ? '#10b981' : '#f43f5e';
     return '<div class="coin-row" onclick="showCoinDetail(\'' + escHtml(c.id) + '\')">' +
       '<div style="display:flex;align-items:center;gap:10px;">' +
         '<span style="font-size:11px;color:var(--muted);width:18px;">' + (idx + 1) + '</span>' +
@@ -851,10 +806,8 @@ function openGainersLosersModal(type) {
 
 function generateSparklinePath(prices) {
   if (!prices || prices.length === 0) return '';
-  var min = Math.min.apply(null, prices);
-  var max = Math.max.apply(null, prices);
-  var range = max - min || 1;
-  var width = 100, height = 35;
+  var min = Math.min.apply(null, prices), max = Math.max.apply(null, prices);
+  var range = max - min || 1, width = 100, height = 35;
   var points = prices.map(function(price, i) {
     var x = (i / (prices.length - 1)) * width;
     var y = height - ((price - min) / range) * height;
@@ -970,9 +923,7 @@ function openNewsModal(id) {
   document.getElementById('modal').classList.add('show');
 }
 
-function generateLiveMarketReports() {
-  rebuildAllNews();
-}
+function generateLiveMarketReports() { rebuildAllNews(); }
 
 async function translateToFa(text) {
   try {
@@ -995,10 +946,7 @@ async function fetchAndTranslateLiveNews() {
       var translatedList = await Promise.all(topItems.map(async function(item) {
         var rawBody = item.description ? item.description.replace(/<[^>]+>/g, '').substring(0, 180) + '...' : item.title;
         var pair = await Promise.all([translateToFa(item.title), translateToFa(rawBody)]);
-        return {
-          id: 'rss_' + (item.guid || item.pubDate),
-          title: pair[0], source: 'Cointelegraph', time: 'اخیر', desc: pair[1]
-        };
+        return { id: 'rss_' + (item.guid || item.pubDate), title: pair[0], source: 'Cointelegraph', time: 'اخیر', desc: pair[1] };
       }));
       window.crLiveApiNews = translatedList;
       rebuildAllNews();
