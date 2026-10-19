@@ -107,6 +107,9 @@ function syncUserToCloud() {
         completedTasks: Array.isArray(currentUser.completedTasks) ? currentUser.completedTasks : [],
         solWallet: currentUser.solWallet || '', ethWallet: currentUser.ethWallet || '',
         savedDrops: savedDrops || [], lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
+        userIP: currentUser.userIP || null,
+        referredBy: currentUser.referredBy || null,
+        referralStatus: currentUser.referralStatus || null,
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch(function(){});
     }
@@ -155,6 +158,12 @@ function initAuth() {
         if (vd.solWallet) currentUser.solWallet = vd.solWallet;
         if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet;
       } else { currentUser.balanceToman = 0; }
+      // بررسی لینک رفرال در پس‌زمینه
+      if (decodedRefEmail && decodedRefEmail !== currentUser.email && !currentUser.referredBy && (!currentUser.balanceToman || currentUser.balanceToman === 0)) {
+        currentUser.referredBy = decodedRefEmail.toLowerCase();
+        currentUser.referralStatus = 'pending';
+        syncUserToCloud();
+      }
       updateUserHeader(); listenToUserSubmissions(); 
       if (!currentUser.userIP) {
         fetchUserIP().then(function(ip) { if(ip && ip !== 'نامشخص') { currentUser.userIP = ip; syncUserToCloud(); } });
@@ -280,6 +289,7 @@ function verifyAndLogin() {
   saveToLocalVault(); 
   document.getElementById('auth-modal').classList.remove('show');
   updateUserHeader(); renderLists(); listenToUserSubmissions(); renderProfilePage();
+  openPage('home'); // انتقال کاربر به صفحه اصلی
 }
 
 function loginAnonymously() {
@@ -469,7 +479,8 @@ function renderProfilePage() {
   
   var savedHtml = savedDrops.length ? savedDrops.map(function(name){ return '<div style="background:#1e2433;padding:8px 12px;border-radius:10px;margin-bottom:6px;font-size:12px;color:#60a5fa;display:flex;justify-content:space-between;"><span>🪂 ' + escHtml(name) + '</span><span style="color:#10b981;">⭐ ذخیره شده</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز ایردراپی ذخیره نکرده‌اید.</div>';
 
-  var refLink = 'https://crypto4youfa.com/?ref=' + encodeURIComponent(currentUser.email);
+  var refCode = btoa(currentUser.email).replace(/=/g, '');
+  var refLink = 'https://crypto4youfa.com/?ref=' + refCode;
   var referralHtml = '<div style="background:#131824;border:1px solid #334155;padding:14px;border-radius:14px;margin-bottom:14px;">' +
       '<div style="font-size:13px;font-weight:900;color:#eab308;margin-bottom:8px;">🎁 دعوت از دوستان (۱۰,۰۰۰ تومان هدیه)</div>' +
       '<div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6;">لینک زیر را برای دوستان خود بفرستید. به ازای هر ثبت‌نام موفق و واقعی که توسط مدیر تایید شود، ۱۰ هزار تومان هدیه بگیرید.</div>' +

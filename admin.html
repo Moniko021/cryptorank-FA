@@ -10,8 +10,9 @@
     .admin-container { max-width:680px; margin:24px auto; padding:20px; background:var(--card); border:1px solid var(--border); border-radius:24px; }
     .admin-title { font-size:19px; font-weight:900; color:#60a5fa; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
     .admin-tabs { display:flex; gap:8px; margin-bottom:16px; }
-    .tab-btn { flex:1; background:#0b0e14; color:var(--muted); border:1px solid var(--border); padding:10px; border-radius:12px; font-size:12px; font-weight:800; cursor:pointer; text-align:center; }
-    .tab-btn.active { background:#3b82f6; color:#fff; border-color:#3b82f6; }
+    .tab-btn { flex:1; background:#151924; color:#8b95a5; border:1px solid #222838; padding:12px; border-radius:12px; font-size:13px; font-weight:900; cursor:pointer; text-align:center; transition:0.2s; box-shadow:0 2px 5px rgba(0,0,0,0.2); }
+    .tab-btn:hover { background:#1e2433; color:#fff; }
+    .tab-btn.active { background:linear-gradient(135deg, #3b82f6, #8b5cf6); color:#fff; border-color:#3b82f6; box-shadow:0 4px 15px rgba(59,130,246,0.4); }
     .admin-sec { display:none; }
     .admin-sec.active { display:block; }
     .item-row { background:#0b0e14; padding:12px; border-radius:14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
@@ -424,39 +425,42 @@
         });
         
         var keys = Object.keys(groups);
-        if (keys.length === 0) { container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ دعوتی ثبت نشده است.</div>'; return; }
+        if (keys.length === 0) { container.innerHTML = '<div style="color:var(--muted); font-size:13px; padding:20px; text-align:center;">هیچ دعوتی ثبت نشده است. (یا کاربران IP و رفرال ندارند)</div>'; return; }
         
         var html = '';
         keys.forEach(function(refEmail) {
           var users = groups[refEmail];
-          html += '<div style="background:#0b0e14; border:1px solid #3b82f6; border-radius:14px; margin-bottom:12px; overflow:hidden;">';
-          html += '<div style="background:#1e293b; padding:10px 12px; font-weight:900; color:#60a5fa; display:flex; justify-content:space-between;">';
-          html += '<span>👤 دعوت‌کننده: <span style="direction:ltr;display:inline-block;">' + escHtml(refEmail) + '</span></span>';
-          html += '<span style="color:#eab308;">' + users.length + ' نفر</span>';
-          html += '</div><div style="padding:10px;">';
+          html += '<div style="background:#0b0e14; border:1px solid #3b82f6; border-radius:16px; margin-bottom:16px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.3);">';
+          
+          html += '<div style="background:linear-gradient(135deg, #1e293b, #0f172a); padding:12px 16px; font-weight:900; color:#60a5fa; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222838;">';
+          html += '<span>👤 دعوت‌کننده: <span style="direction:ltr;display:inline-block; color:#fff;">' + escHtml(refEmail) + '</span></span>';
+          html += '<span style="color:#eab308; background:rgba(234,179,8,0.1); padding:4px 10px; border-radius:8px; font-size:12px;">' + users.length + ' دعوت موفق</span>';
+          html += '</div><div style="padding:16px;">';
           
           users.forEach(function(u) {
             var d = u.data;
             var hasWallet = (d.solWallet && d.solWallet.length > 5) || (d.ethWallet && d.ethWallet.length > 5);
-            var walletBadge = hasWallet ? '<span style="color:#10b981;font-size:10px;">💳 کیف پول دارد</span>' : '<span style="color:#f43f5e;font-size:10px;">❌ بدون کیف پول</span>';
-            var ipTxt = d.userIP ? d.userIP : 'نامشخص';
+            var walletBadge = hasWallet ? '<span style="color:#10b981;font-size:11px;">💳 کیف پول متصل</span>' : '<span style="color:#f43f5e;font-size:11px;">❌ بدون کیف پول</span>';
+            var ipTxt = d.userIP ? d.userIP : 'ثبت نشده';
             var status = d.referralStatus;
             var statusColor = status === 'approved' ? '#10b981' : (status === 'rejected' ? '#f43f5e' : '#eab308');
+            var statusTxt = status === 'approved' ? '✅ تایید شده' : (status === 'rejected' ? '❌ رد شده' : '⏳ در انتظار تایید');
             
-            html += '<div style="border-bottom:1px solid #222838; padding-bottom:8px; margin-bottom:8px;">';
-            html += '<div style="display:flex; justify-content:space-between; margin-bottom:4px;">';
-            html += '<span style="font-size:12px; color:#fff; direction:ltr;">' + escHtml(d.email || u.docId) + '</span>';
-            html += '<span style="font-size:10px; color:' + statusColor + '; font-weight:bold;">' + (status === 'approved' ? '✅ تایید شده' : status === 'rejected' ? '❌ رد شده' : '⏳ در انتظار') + '</span>';
+            html += '<div style="border:1px solid #222838; border-radius:12px; padding:12px; margin-bottom:12px; background:#151924;">';
+            html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
+            html += '<span style="font-size:13px; color:#fff; direction:ltr; font-weight:bold;">' + escHtml(d.email || u.docId) + '</span>';
+            html += '<span style="font-size:11px; color:' + statusColor + '; font-weight:900; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:6px;">' + statusTxt + '</span>';
             html += '</div>';
-            html += '<div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-bottom:6px;">';
-            html += '<span>IP: <b style="color:#a855f7; direction:ltr;">' + escHtml(ipTxt) + '</b></span>';
+            
+            html += '<div style="display:flex; justify-content:space-between; font-size:12px; color:#94a3b8; margin-bottom:12px;">';
+            html += '<span>🌐 IP: <b style="color:#a855f7; direction:ltr;">' + escHtml(ipTxt) + '</b></span>';
             html += '<span>' + walletBadge + '</span>';
             html += '</div>';
             
             if (status !== 'approved' && status !== 'rejected') {
-              html += '<div style="display:flex; gap:6px;">';
-              html += '<button onclick="approveReferral(\'' + u.docId + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:6px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">✅ تایید (واریز به هر دو)</button>';
-              html += '<button onclick="rejectReferral(\'' + u.docId + '\')" style="flex:1; background:#f43f5e; color:#fff; border:none; padding:6px; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer;">❌ رد تقلب</button>';
+              html += '<div style="display:flex; gap:8px;">';
+              html += '<button onclick="approveReferral(\'' + u.docId + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:10px; border-radius:8px; font-size:12px; font-weight:900; cursor:pointer; transition:0.2s;">✅ تایید و واریز جایزه</button>';
+              html += '<button onclick="rejectReferral(\'' + u.docId + '\')" style="flex:1; background:rgba(244,63,94,0.15); color:#f43f5e; border:1px solid #f43f5e; padding:10px; border-radius:8px; font-size:12px; font-weight:900; cursor:pointer; transition:0.2s;">❌ رد تقلب</button>';
               html += '</div>';
             }
             html += '</div>';
@@ -464,6 +468,8 @@
           html += '</div></div>';
         });
         container.innerHTML = html;
+      }).catch(function(err) {
+        container.innerHTML = '<div style="color:#f43f5e; padding:10px;">خطا: ' + err.message + '</div>';
       });
     }
 
