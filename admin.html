@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>پنل مدیریت ابری | crypto4youFA</title>
   <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
-  <link rel="stylesheet" href="style.css?v=2100">
+  <link rel="stylesheet" href="style.css?v=2200">
   <style>
     .admin-container { max-width:680px; margin:24px auto; padding:20px; background:var(--card); border:1px solid var(--border); border-radius:24px; }
     .admin-title { font-size:19px; font-weight:900; color:#60a5fa; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
-    .admin-tabs { display:flex; gap:8px; margin-bottom:16px; }
-    .tab-btn { flex:1; background:#151924; color:#8b95a5; border:1px solid #222838; padding:12px; border-radius:12px; font-size:13px; font-weight:900; cursor:pointer; text-align:center; transition:0.2s; box-shadow:0 2px 5px rgba(0,0,0,0.2); }
+    .admin-tabs { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+    .tab-btn { flex:1; min-width:120px; background:#151924; color:#8b95a5; border:1px solid #222838; padding:12px; border-radius:12px; font-size:13px; font-weight:900; cursor:pointer; text-align:center; transition:0.2s; box-shadow:0 2px 5px rgba(0,0,0,0.2); }
     .tab-btn:hover { background:#1e2433; color:#fff; }
     .tab-btn.active { background:linear-gradient(135deg, #3b82f6, #8b5cf6); color:#fff; border-color:#3b82f6; box-shadow:0 4px 15px rgba(59,130,246,0.4); }
     .admin-sec { display:none; }
@@ -22,10 +22,9 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="firebase-config.js?v=2100"></script>
+  <script src="firebase-config.js?v=2200"></script>
 </head>
 <body>
-
   <div class="admin-container">
     <div class="admin-title">
       <span>👑 پنل مدیریت crypto4youFA</span>
@@ -79,7 +78,6 @@
         <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست ایردراپ‌های فعال روی ابر:</div>
         <div id="admin-drops-list"></div>
       </div>
-
       <div id="sec-tasks" class="admin-sec">
         <div style="background:#0b0e14; padding:16px; border-radius:18px; margin-bottom:18px;">
           <h3 style="font-size:14px; font-weight:900; margin-bottom:12px; color:#3b82f6;">+ تعریف تسک پاداش نقدی جدید</h3>
@@ -119,11 +117,12 @@
     function escHtml(s) {
       return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
-
     function cleanUrl(u) {
       var s = String(u || '').trim();
-      if (/^https?:\/\//i.test(s)) return s;
-      return 'https://';
+      return /^https?:\/\//i.test(s) ? s : 'https://';
+    }
+    function getDocKey(e) {
+      return String(e || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
     }
 
     function checkAdminLogin() {
@@ -131,28 +130,20 @@
       var pass = document.getElementById('admin-pass').value;
       var errBox = document.getElementById('login-error');
       errBox.innerText = '';
-      
       if (!email || !pass) return errBox.innerText = 'ایمیل و رمز عبور را وارد کنید.';
-
-      firebase.auth().signInWithEmailAndPassword(email, pass)
-        .then(function(userCredential) {
-          document.getElementById('login-box').style.display = 'none';
-          document.getElementById('panel-box').style.display = 'block';
-          loadAllAdminData();
-        })
-        .catch(function(error) {
-          errBox.innerText = '⛔ خطا: ' + error.message;
-        });
+      firebase.auth().signInWithEmailAndPassword(email, pass).then(function() {
+        document.getElementById('login-box').style.display = 'none';
+        document.getElementById('panel-box').style.display = 'block';
+        loadAllAdminData();
+      }).catch(function(error) { errBox.innerText = '⛔ خطا: ' + error.message; });
     }
 
     function logoutAdmin() {
-      firebase.auth().signOut().then(function() {
-        window.location.reload();
-      });
+      firebase.auth().signOut().then(function() { window.location.reload(); });
     }
 
     firebase.auth().onAuthStateChanged(function(user) {
-      if (user) {
+      if (user && !user.isAnonymous) {
         document.getElementById('login-box').style.display = 'none';
         document.getElementById('panel-box').style.display = 'block';
         loadAllAdminData();
@@ -172,40 +163,24 @@
     }
 
     function loadAllAdminData() {
-      loadCloudDropsAdmin();
-      loadCloudTasksAdmin();
-      loadAdminUsers();
-      loadTaskVerifications();
-      loadReferrals();
+      loadCloudDropsAdmin(); loadCloudTasksAdmin(); loadAdminUsers(); loadTaskVerifications(); loadReferrals();
     }
-
     function loadCloudDropsAdmin() {
       db.collection("drops").onSnapshot(function(snap) {
         var container = document.getElementById('admin-drops-list');
         adminDropsCache = {};
-        if (snap.empty) {
-          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ ایردراپی ثبت نشده است.</div>';
-          return;
-        }
+        if (snap.empty) { container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ ایردراپی ثبت نشده است.</div>'; return; }
         var html = '';
         snap.forEach(function(doc) {
-          var d = doc.data();
-          adminDropsCache[doc.id] = d;
-          html += '<div class="item-row">' +
-            '<div><div style="font-weight:900; font-size:14px;">🪂 ' + escHtml(d.name) + '</div><div style="font-size:11px; color:var(--muted);">' + escHtml(d.chain) + ' | ' + escHtml(d.cost) + '</div></div>' +
-            '<div style="display:flex;gap:6px;">' +
-              '<button data-id="' + escHtml(doc.id) + '" onclick="editDrop(this.dataset.id)" class="edit-btn">ویرایش</button>' +
-              '<button data-id="' + escHtml(doc.id) + '" onclick="deleteDoc(\'drops\', this.dataset.id)" class="del-btn">حذف</button>' +
-            '</div>' +
-          '</div>';
+          var d = doc.data(); adminDropsCache[doc.id] = d;
+          html += '<div class="item-row"><div><div style="font-weight:900; font-size:14px;">🪂 ' + escHtml(d.name) + '</div><div style="font-size:11px; color:var(--muted);">' + escHtml(d.chain) + ' | ' + escHtml(d.cost) + '</div></div><div style="display:flex;gap:6px;"><button data-id="' + escHtml(doc.id) + '" onclick="editDrop(this.dataset.id)" class="edit-btn">ویرایش</button><button data-id="' + escHtml(doc.id) + '" onclick="deleteDoc(\'drops\', this.dataset.id)" class="del-btn">حذف</button></div></div>';
         });
         container.innerHTML = html;
       });
     }
 
     function editDrop(docId) {
-      var d = adminDropsCache[docId];
-      if (!d) return;
+      var d = adminDropsCache[docId]; if (!d) return;
       document.getElementById('edit-drop-docid').value = docId;
       document.getElementById('n-name').value = d.name || '';
       document.getElementById('n-task').value = d.task || '';
@@ -237,10 +212,8 @@
       var rawSteps = document.getElementById('n-steps').value.trim();
       var stepsArr = rawSteps ? rawSteps.split('\n').map(function(s) { return s.trim(); }).filter(Boolean) : [];
       var editId = document.getElementById('edit-drop-docid').value;
-
       var payload = {
-        id: Date.now() + Math.floor(Math.random() * 1000),
-        name: name,
+        id: Date.now() + Math.floor(Math.random() * 1000), name: name,
         task: document.getElementById('n-task').value.trim() || 'تسک‌های کمپین',
         vc: document.getElementById('n-vc').value.trim() || 'نامشخص',
         raised: document.getElementById('n-raised').value.trim() || 'نامشخص',
@@ -248,27 +221,17 @@
         reward: document.getElementById('n-reward').value.trim() || 'توکن پروژه',
         cost: document.getElementById('n-cost').value,
         urgent: document.getElementById('n-urgent').value === 'true',
-        steps: stepsArr,
-        link: cleanUrl(document.getElementById('n-link').value),
+        steps: stepsArr, link: cleanUrl(document.getElementById('n-link').value),
         updatedAt: new Date().toLocaleDateString('fa-IR')
       };
-
       var prom = editId ? db.collection("drops").doc(editId).set(payload, { merge: true }) : db.collection("drops").add(payload);
-      prom.then(function() {
-        alert(editId ? '✅ تغییرات ایردراپ ذخیره شد!' : '✅ ایردراپ جدید منتشر شد!');
-        resetDropForm();
-      }).catch(function(err) {
-        alert('خطا در ذخیره: ' + err.message);
-      });
+      prom.then(function() { alert(editId ? '✅ تغییرات ذخیره شد!' : '✅ ایردراپ منتشر شد!'); resetDropForm(); }).catch(function(err) { alert('خطا: ' + err.message); });
     }
 
     function loadCloudTasksAdmin() {
       db.collection("tasks").onSnapshot(function(snap) {
         var container = document.getElementById('admin-tasks-list');
-        if (snap.empty) {
-          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ تسکی ثبت نشده است.</div>';
-          return;
-        }
+        if (snap.empty) { container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ تسکی ثبت نشده است.</div>'; return; }
         var html = '';
         snap.forEach(function(doc) {
           var t = doc.data();
@@ -279,198 +242,124 @@
     }
 
     function saveNewTaskCloud() {
-      var title = document.getElementById('t-title').value.trim();
-      var reward = document.getElementById('t-reward').value.trim();
+      var title = document.getElementById('t-title').value.trim(), reward = document.getElementById('t-reward').value.trim();
       if (!title || !reward) return alert('عنوان و مبلغ پاداش را وارد کنید.');
-      db.collection("tasks").add({
-        id: Date.now() + Math.floor(Math.random() * 1000),
-        title: title,
-        reward: Number(reward),
-        link: cleanUrl(document.getElementById('t-link').value)
-      }).then(function() {
-        alert('✅ تسک جدید ثبت شد!');
-        ['t-title','t-reward','t-link'].forEach(function(id) { document.getElementById(id).value = ''; });
-      }).catch(function(err) {
-        alert('خطا در ذخیره: ' + err.message);
-      });
+      db.collection("tasks").add({ id: Date.now() + Math.floor(Math.random() * 1000), title: title, reward: Number(reward), link: cleanUrl(document.getElementById('t-link').value) }).then(function() {
+        alert('✅ تسک جدید ثبت شد!'); ['t-title','t-reward','t-link'].forEach(function(id) { document.getElementById(id).value = ''; });
+      }).catch(function(err) { alert('خطا: ' + err.message); });
     }
 
     function deleteDoc(col, docId) {
       if (!confirm('آیا از حذف این مورد مطمئن هستید؟')) return;
-      db.collection(col).doc(docId).delete().catch(function(err) {
-        alert('خطا در حذف: ' + err.message);
-      });
+      db.collection(col).doc(docId).delete().catch(function(err) { alert('خطا: ' + err.message); });
     }
 
     function copyWalletByBtn(btn) {
       var txt = btn.getAttribute('data-wallet') || '';
       if (!txt) return alert('آدرسی ثبت نشده است!');
-      navigator.clipboard.writeText(txt).then(function() {
-        alert('✅ آدرس کیف پول کپی شد: ' + txt);
-      }).catch(function() {
-        prompt('آدرس کیف پول را کپی کنید:', txt);
-      });
+      navigator.clipboard.writeText(txt).then(function() { alert('✅ آدرس کپی شد: ' + txt); }).catch(function() { prompt('کپی کنید:', txt); });
     }
 
     function markUserPaidByBtn(btn) {
-      var docId = btn.getAttribute('data-docid');
-      var u = adminUsersCache[docId];
+      var docId = btn.getAttribute('data-docid'), u = adminUsersCache[docId];
       if (!u) return;
       var bal = Number(u.balanceToman) || 0;
-      if (!confirm('آیا جایزه (' + bal.toLocaleString('fa-IR') + ' تومان) برای ' + (u.email || docId) + ' واریز شد و موجودی او صفر شود؟')) return;
-
+      if (!confirm('آیا جایزه (' + bal.toLocaleString('fa-IR') + ' تومان) برای ' + (u.email || docId) + ' تسویه شود؟')) return;
       var paidRecord = [{ title: '✅ تسویه حساب هفتگی انجام شد', amount: 0, date: new Date().toLocaleDateString('fa-IR') }];
-      db.collection("users").doc(docId).set({
-        balanceToman: 0,
-        prizesList: paidRecord,
-        paidResetAt: Date.now()
-      }, { merge: true }).then(function() {
-        alert('✅ موجودی کاربر با موفقیت صفر شد!');
-        loadAdminUsers();
-      }).catch(function(err) {
-        alert('خطا: ' + err.message);
-      });
+      db.collection("users").doc(docId).set({ balanceToman: 0, prizesList: paidRecord, paidResetAt: Date.now() }, { merge: true }).then(function() {
+        alert('✅ موجودی کاربر صفر شد!'); loadAdminUsers();
+      }).catch(function(err) { alert('خطا: ' + err.message); });
     }
-
     function renderUsersHtml(list) {
-      var box = document.getElementById('users-admin-list');
-      if (!box) return;
-      if (!list || list.length === 0) {
-        box.innerHTML = '<div style="text-align:center; padding:14px; background:#0b0e14; border-radius:10px; color:#94a3b8;">هنوز هیچ کاربری ثبت‌نام نکرده است.</div>';
-        return;
-      }
+      var box = document.getElementById('users-admin-list'); if (!box) return;
+      if (!list || list.length === 0) { box.innerHTML = '<div style="text-align:center; padding:14px; background:#0b0e14; border-radius:10px; color:#94a3b8;">هنوز هیچ کاربری ثبت‌نام نکرده است.</div>'; return; }
       list.sort(function(a, b) { return (Number(b.balanceToman) || 0) - (Number(a.balanceToman) || 0); });
       adminUsersCache = {};
-
       box.innerHTML = list.map(function(u) {
         adminUsersCache[u.docId] = u;
-        var bal = Number(u.balanceToman) || 0;
-        var sol = String(u.solWallet || '');
-        var eth = String(u.ethWallet || '');
-        var prizes = Array.isArray(u.prizesList) ? u.prizesList : [];
-        var prizesTxt = prizes.length > 0
-          ? prizes.map(function(p) { return '<span style="display:inline-block; background:#1e293b; color:#10b981; padding:3px 8px; border-radius:6px; margin:2px; font-size:10px;">🎁 ' + escHtml(p.title) + ' (' + escHtml(p.date || '') + ')</span>'; }).join('')
-          : '<span style="color:#64748b; font-size:11px;">هنوز جایزه‌ای نبرده</span>';
-
-        return '<div style="background:#0b0e14; border:1px solid #1e2433; border-radius:12px; padding:12px; margin-bottom:10px;">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2433; padding-bottom:8px; margin-bottom:8px;">' +
-            '<div>' +
-              '<div style="font-weight:900; font-size:14px; color:#fff;">👤 ' + escHtml(u.name || 'کاربر') + '</div>' +
-              '<div style="font-size:11px; color:#60a5fa; direction:ltr; text-align:right;">' + escHtml(u.email || u.docId) + '</div>' +
-            '</div>' +
-            '<div style="text-align:left;">' +
-              '<div style="font-size:10px; color:#94a3b8;">موجودی جایزه:</div>' +
-              '<div style="font-size:15px; font-weight:900; color:' + (bal > 0 ? '#10b981' : '#64748b') + ';">' + bal.toLocaleString('fa-IR') + ' تومان</div>' +
-            '</div>' +
-          '</div>' +
-          '<div style="margin-bottom:8px; line-height:1.8;">' +
-            '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px; margin-bottom:4px;">' +
-              '<span style="font-size:11px; color:#a855f7;">🟣 سولانا: <b style="color:#fff; direction:ltr; display:inline-block;">' + (sol ? escHtml(sol.substring(0, 16) + '...') : 'ثبت نشده') + '</b></span>' +
-              (sol ? '<button data-wallet="' + escHtml(sol) + '" onclick="copyWalletByBtn(this)" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
-            '</div>' +
-            '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px;">' +
-              '<span style="font-size:11px; color:#3b82f6;">🔵 اتریوم: <b style="color:#fff; direction:ltr; display:inline-block;">' + (eth ? escHtml(eth.substring(0, 16) + '...') : 'ثبت نشده') + '</b></span>' +
-              (eth ? '<button data-wallet="' + escHtml(eth) + '" onclick="copyWalletByBtn(this)" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
-            '</div>' +
-          '</div>' +
-          '<div style="margin-bottom:8px;"><span style="font-size:11px; color:#94a3b8;">🏆 جوایز: </span>' + prizesTxt + '</div>' +
-          (bal > 0 ? '<button data-docid="' + escHtml(u.docId) + '" onclick="markUserPaidByBtn(this)" style="width:100%; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-weight:bold; font-size:11px; cursor:pointer;">✅ تسویه شد (صفر کردن موجودی)</button>' : '') +
-        '</div>';
+        var bal = Number(u.balanceToman) || 0, sol = String(u.solWallet || ''), eth = String(u.ethWallet || ''), prizes = Array.isArray(u.prizesList) ? u.prizesList : [];
+        var prizesTxt = prizes.length > 0 ? prizes.map(function(p) { return '<span style="display:inline-block; background:#1e293b; color:#10b981; padding:3px 8px; border-radius:6px; margin:2px; font-size:10px;">🎁 ' + escHtml(p.title) + ' (' + escHtml(p.date || '') + ')</span>'; }).join('') : '<span style="color:#64748b; font-size:11px;">هنوز جایزه‌ای نبرده</span>';
+        return '<div style="background:#0b0e14; border:1px solid #1e2433; border-radius:12px; padding:12px; margin-bottom:10px;"><div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2433; padding-bottom:8px; margin-bottom:8px;"><div><div style="font-weight:900; font-size:14px; color:#fff;">👤 ' + escHtml(u.name || 'کاربر') + '</div><div style="font-size:11px; color:#60a5fa; direction:ltr; text-align:right;">' + escHtml(u.email || u.docId) + '</div></div><div style="text-align:left;"><div style="font-size:10px; color:#94a3b8;">موجودی جایزه:</div><div style="font-size:15px; font-weight:900; color:' + (bal > 0 ? '#10b981' : '#64748b') + ';">' + bal.toLocaleString('fa-IR') + ' تومان</div></div></div><div style="margin-bottom:8px; line-height:1.8;"><div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px; margin-bottom:4px;"><span style="font-size:11px; color:#a855f7;">🟣 سولانا: <b style="color:#fff; direction:ltr; display:inline-block;">' + (sol ? escHtml(sol.substring(0, 16) + '...') : 'ثبت نشده') + '</b></span>' + (sol ? '<button data-wallet="' + escHtml(sol) + '" onclick="copyWalletByBtn(this)" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') + '</div><div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px;"><span style="font-size:11px; color:#3b82f6;">🔵 اتریوم: <b style="color:#fff; direction:ltr; display:inline-block;">' + (eth ? escHtml(eth.substring(0, 16) + '...') : 'ثبت نشده') + '</b></span>' + (eth ? '<button data-wallet="' + escHtml(eth) + '" onclick="copyWalletByBtn(this)" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') + '</div></div><div style="margin-bottom:8px;"><span style="font-size:11px; color:#94a3b8;">🏆 جوایز: </span>' + prizesTxt + '</div>' + (bal > 0 ? '<button data-docid="' + escHtml(u.docId) + '" onclick="markUserPaidByBtn(this)" style="width:100%; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-weight:bold; font-size:11px; cursor:pointer;">✅ تسویه شد (صفر کردن موجودی)</button>' : '') + '</div>';
       }).join('');
     }
 
-    
     function loadTaskVerifications() {
       db.collection("task_submissions").where("status", "==", "pending").onSnapshot(function(snap) {
-        var container = document.getElementById('admin-verifications-list');
-        if (!container) return;
-        if (snap.empty) {
-          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ مدرکی در انتظار تایید نیست.</div>';
-          return;
-        }
+        var container = document.getElementById('admin-verifications-list'); if (!container) return;
+        if (snap.empty) { container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ مدرکی در انتظار تایید نیست.</div>'; return; }
         var html = '';
         snap.forEach(function(doc) {
           var d = doc.data();
-          html += '<div class="item-row" style="flex-direction:column; align-items:flex-start; gap:10px;">' +
-            '<div style="width:100%; display:flex; justify-content:space-between;">' +
-              '<div><b>' + escHtml(d.name) + '</b> <span style="font-size:10px; color:#60a5fa; direction:ltr;">(' + escHtml(d.email) + ')</span></div>' +
-              '<span style="color:#10b981; font-weight:bold;">+' + Number(d.reward).toLocaleString('fa-IR') + ' ت</span>' +
-            '</div>' +
-            '<div style="font-size:12px; color:var(--muted);">تسک: ' + escHtml(d.taskTitle) + '</div>' +
-            '<div style="background:#131722; padding:10px; border-radius:8px; width:100%; font-size:12px; color:#eab308;">مدرک کاربر: <b>' + escHtml(d.proof) + '</b></div>' +
-            '<div style="display:flex; gap:8px; width:100%; margin-top:4px;">' +
-              '<button onclick="approveTaskVerification(\'' + doc.id + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">✅ تایید و واریز جایزه</button>' +
-              '<button onclick="rejectTaskVerification(\'' + doc.id + '\')" style="flex:1; background:#f43f5e; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">❌ رد کردن</button>' +
-            '</div>' +
-          '</div>';
+          html += '<div class="item-row" style="flex-direction:column; align-items:flex-start; gap:10px;"><div style="width:100%; display:flex; justify-content:space-between;"><div><b>' + escHtml(d.name) + '</b> <span style="font-size:10px; color:#60a5fa; direction:ltr;">(' + escHtml(d.email) + ')</span></div><span style="color:#10b981; font-weight:bold;">+' + Number(d.reward || 0).toLocaleString('fa-IR') + ' ت</span></div><div style="font-size:12px; color:var(--muted);">تسک: ' + escHtml(d.taskTitle) + '</div><div style="background:#131722; padding:10px; border-radius:8px; width:100%; font-size:12px; color:#eab308;">مدرک کاربر: <b>' + escHtml(d.proof) + '</b></div><div style="display:flex; gap:8px; width:100%; margin-top:4px;"><button data-id="' + escHtml(doc.id) + '" onclick="approveTaskVerification(this.dataset.id)" style="flex:1; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">✅ تایید و واریز جایزه</button><button data-id="' + escHtml(doc.id) + '" onclick="rejectTaskVerification(this.dataset.id)" style="flex:1; background:#f43f5e; color:#fff; border:none; padding:8px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">❌ رد کردن</button></div></div>';
         });
         container.innerHTML = html;
       });
     }
 
+    function approveTaskVerification(docId) {
+      if (!confirm('آیا مدرک تایید و جایزه به حساب کاربر واریز شود؟')) return;
+      var sDoc = db.collection("task_submissions").doc(docId);
+      sDoc.get().then(function(doc) {
+        if (!doc.exists) return;
+        var data = doc.data();
+        sDoc.update({ status: 'approved' }).then(function() {
+          var uDoc = db.collection("users").doc(getDocKey(data.email));
+          uDoc.get().then(function(uSnap) {
+            if (uSnap.exists) {
+              var uData = uSnap.data(), rewardAmt = Number(data.reward) || 0;
+              var newBal = (Number(uData.balanceToman) || 0) + rewardAmt;
+              var pList = Array.isArray(uData.prizesList) ? uData.prizesList : [];
+              pList.unshift({ title: 'تسک تایید شده: ' + (data.taskTitle || ''), amount: rewardAmt, date: new Date().toLocaleDateString('fa-IR') });
+              var completed = Array.isArray(uData.completedTasks) ? uData.completedTasks : [];
+              var tid = String(data.taskId || '');
+              if (tid && !completed.includes(tid)) completed.push(tid);
+              uDoc.update({ balanceToman: newBal, prizesList: pList, completedTasks: completed }).then(function() { alert('✅ تایید شد و جایزه به حساب کاربر اضافه گردید.'); loadAdminUsers(); });
+            } else { alert('کاربر در دیتابیس یافت نشد!'); }
+          });
+        });
+      });
+    }
+
+    function rejectTaskVerification(docId) {
+      if (!confirm('آیا مدرک رد شود؟')) return;
+      db.collection("task_submissions").doc(docId).update({ status: 'rejected' }).then(function() { alert('❌ مدرک رد شد.'); });
+    }
+
     function loadReferrals() {
-      var container = document.getElementById('admin-referrals-list');
-      if (!container) return;
+      var container = document.getElementById('admin-referrals-list'); if (!container) return;
       container.innerHTML = '<div style="color:#eab308; padding:10px;">⏳ در حال دریافت لیست...</div>';
-      
       db.collection("users").get().then(function(snap) {
         var groups = {};
         snap.forEach(function(doc) {
           var d = doc.data();
           if (d.referredBy) {
-            var ref = d.referredBy.toLowerCase();
+            var ref = String(d.referredBy).toLowerCase();
             if (!groups[ref]) groups[ref] = [];
             groups[ref].push({ docId: doc.id, data: d });
           }
         });
-        
         var keys = Object.keys(groups);
-        if (keys.length === 0) { container.innerHTML = '<div style="color:var(--muted); font-size:13px; padding:20px; text-align:center;">هیچ دعوتی ثبت نشده است. (یا کاربران IP و رفرال ندارند)</div>'; return; }
-        
+        if (keys.length === 0) { container.innerHTML = '<div style="color:var(--muted); font-size:13px; padding:20px; text-align:center;">هیچ دعوتی ثبت نشده است.</div>'; return; }
         var html = '';
         keys.forEach(function(refEmail) {
           var users = groups[refEmail];
-          html += '<div style="background:#0b0e14; border:1px solid #3b82f6; border-radius:16px; margin-bottom:16px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.3);">';
-          
-          html += '<div style="background:linear-gradient(135deg, #1e293b, #0f172a); padding:12px 16px; font-weight:900; color:#60a5fa; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222838;">';
-          html += '<span>👤 دعوت‌کننده: <span style="direction:ltr;display:inline-block; color:#fff;">' + escHtml(refEmail) + '</span></span>';
-          html += '<span style="color:#eab308; background:rgba(234,179,8,0.1); padding:4px 10px; border-radius:8px; font-size:12px;">' + users.length + ' دعوت موفق</span>';
-          html += '</div><div style="padding:16px;">';
-          
+          html += '<div style="background:#0b0e14; border:1px solid #3b82f6; border-radius:16px; margin-bottom:16px; overflow:hidden;"><div style="background:linear-gradient(135deg, #1e293b, #0f172a); padding:12px 16px; font-weight:900; color:#60a5fa; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #222838;"><span>👤 دعوت‌کننده: <span style="direction:ltr;display:inline-block; color:#fff;">' + escHtml(refEmail) + '</span></span><span style="color:#eab308; background:rgba(234,179,8,0.1); padding:4px 10px; border-radius:8px; font-size:12px;">' + users.length + ' دعوت</span></div><div style="padding:16px;">';
           users.forEach(function(u) {
-            var d = u.data;
-            var hasWallet = (d.solWallet && d.solWallet.length > 5) || (d.ethWallet && d.ethWallet.length > 5);
+            var d = u.data, hasWallet = (d.solWallet && d.solWallet.length > 5) || (d.ethWallet && d.ethWallet.length > 5);
             var walletBadge = hasWallet ? '<span style="color:#10b981;font-size:11px;">💳 کیف پول متصل</span>' : '<span style="color:#f43f5e;font-size:11px;">❌ بدون کیف پول</span>';
-            var ipTxt = d.userIP ? d.userIP : 'ثبت نشده';
-            var status = d.referralStatus;
+            var ipTxt = d.userIP ? d.userIP : 'ثبت نشده', status = d.referralStatus;
             var statusColor = status === 'approved' ? '#10b981' : (status === 'rejected' ? '#f43f5e' : '#eab308');
             var statusTxt = status === 'approved' ? '✅ تایید شده' : (status === 'rejected' ? '❌ رد شده' : '⏳ در انتظار تایید');
-            
-            html += '<div style="border:1px solid #222838; border-radius:12px; padding:12px; margin-bottom:12px; background:#151924;">';
-            html += '<div style="display:flex; justify-content:space-between; margin-bottom:8px;">';
-            html += '<span style="font-size:13px; color:#fff; direction:ltr; font-weight:bold;">' + escHtml(d.email || u.docId) + '</span>';
-            html += '<span style="font-size:11px; color:' + statusColor + '; font-weight:900; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:6px;">' + statusTxt + '</span>';
-            html += '</div>';
-            
-            html += '<div style="display:flex; justify-content:space-between; font-size:12px; color:#94a3b8; margin-bottom:12px;">';
-            html += '<span>🌐 IP: <b style="color:#a855f7; direction:ltr;">' + escHtml(ipTxt) + '</b></span>';
-            html += '<span>' + walletBadge + '</span>';
-            html += '</div>';
-            
+            html += '<div style="border:1px solid #222838; border-radius:12px; padding:12px; margin-bottom:12px; background:#151924;"><div style="display:flex; justify-content:space-between; margin-bottom:8px;"><span style="font-size:13px; color:#fff; direction:ltr; font-weight:bold;">' + escHtml(d.email || u.docId) + '</span><span style="font-size:11px; color:' + statusColor + '; font-weight:900; background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:6px;">' + statusTxt + '</span></div><div style="display:flex; justify-content:space-between; font-size:12px; color:#94a3b8; margin-bottom:12px;"><span>🌐 IP: <b style="color:#a855f7; direction:ltr;">' + escHtml(ipTxt) + '</b></span><span>' + walletBadge + '</span></div>';
             if (status !== 'approved' && status !== 'rejected') {
-              html += '<div style="display:flex; gap:8px;">';
-              html += '<button onclick="approveReferral(\'' + u.docId + '\')" style="flex:1; background:#10b981; color:#fff; border:none; padding:10px; border-radius:8px; font-size:12px; font-weight:900; cursor:pointer; transition:0.2s;">✅ تایید و واریز جایزه</button>';
-              html += '<button onclick="rejectReferral(\'' + u.docId + '\')" style="flex:1; background:rgba(244,63,94,0.15); color:#f43f5e; border:1px solid #f43f5e; padding:10px; border-radius:8px; font-size:12px; font-weight:900; cursor:pointer; transition:0.2s;">❌ رد تقلب</button>';
-              html += '</div>';
+              html += '<div style="display:flex; gap:8px;"><button data-id="' + escHtml(u.docId) + '" onclick="approveReferral(this.dataset.id)" style="flex:1; background:#10b981; color:#fff; border:none; padding:10px; border-radius:8px; font-size:12px; font-weight:900; cursor:pointer;">✅ تایید و واریز جایزه</button><button data-id="' + escHtml(u.docId) + '" onclick="rejectReferral(this.dataset.id)" style="flex:1; background:rgba(244,63,94,0.15); color:#f43f5e; border:1px solid #f43f5e; padding:10px; border-radius:8px; font-size:12px; font-weight:900; cursor:pointer;">❌ رد تقلب</button></div>';
             }
             html += '</div>';
           });
           html += '</div></div>';
         });
         container.innerHTML = html;
-      }).catch(function(err) {
-        container.innerHTML = '<div style="color:#f43f5e; padding:10px;">خطا: ' + err.message + '</div>';
-      });
+      }).catch(function(err) { container.innerHTML = '<div style="color:#f43f5e; padding:10px;">خطا: ' + err.message + '</div>'; });
     }
 
     function approveReferral(newUserId) {
@@ -478,25 +367,19 @@
       var newUserDoc = db.collection("users").doc(newUserId);
       newUserDoc.get().then(function(doc) {
         if (!doc.exists) return;
-        var data = doc.data();
-        var referrerEmail = data.referredBy;
+        var data = doc.data(), referrerEmail = data.referredBy;
         if (!referrerEmail) return;
-        var referrerDoc = db.collection("users").doc(referrerEmail.trim().toLowerCase().replace(/[^a-z0-9]/g, '_'));
+        var referrerDoc = db.collection("users").doc(getDocKey(referrerEmail));
         referrerDoc.get().then(function(refSnap) {
           if (refSnap.exists) {
-            var refData = refSnap.data();
-            var newRefBal = (Number(refData.balanceToman) || 0) + 10000;
+            var refData = refSnap.data(), newRefBal = (Number(refData.balanceToman) || 0) + 10000;
             var refPList = Array.isArray(refData.prizesList) ? refData.prizesList : [];
             refPList.unshift({ title: 'هدیه دعوت از: ' + data.email, amount: 10000, date: new Date().toLocaleDateString('fa-IR') });
-            
             referrerDoc.update({ balanceToman: newRefBal, prizesList: refPList }).then(function() {
               var newUserBal = (Number(data.balanceToman) || 0) + 10000;
               var newUserPList = Array.isArray(data.prizesList) ? data.prizesList : [];
               newUserPList.unshift({ title: 'هدیه ثبت‌نام با لینک دعوت', amount: 10000, date: new Date().toLocaleDateString('fa-IR') });
-              newUserDoc.update({ balanceToman: newUserBal, prizesList: newUserPList, referralStatus: 'approved' }).then(function() {
-                alert('✅ هر دو نفر ۱۰,۰۰۰ تومان دریافت کردند.');
-                loadReferrals();
-              });
+              newUserDoc.update({ balanceToman: newUserBal, prizesList: newUserPList, referralStatus: 'approved' }).then(function() { alert('✅ هر دو نفر ۱۰,۰۰۰ تومان دریافت کردند.'); loadReferrals(); loadAdminUsers(); });
             });
           } else { alert('حساب دعوت‌کننده یافت نشد!'); }
         });
@@ -505,35 +388,20 @@
 
     function rejectReferral(newUserId) {
       if (!confirm('آیا این دعوت جعلی است؟')) return;
-      db.collection("users").doc(newUserId).update({ referralStatus: 'rejected' }).then(function() {
-        alert('❌ دعوت رد شد.');
-        loadReferrals();
-      });
+      db.collection("users").doc(newUserId).update({ referralStatus: 'rejected' }).then(function() { alert('❌ دعوت رد شد.'); loadReferrals(); });
     }
 
     function loadAdminUsers() {
-      var box = document.getElementById('users-admin-list');
-      if (!box) return;
+      var box = document.getElementById('users-admin-list'); if (!box) return;
       box.innerHTML = '<div style="color:#eab308; padding:10px;">⏳ در حال دریافت لیست کاربران از سرور...</div>';
-
       db.collection("users").get().then(function(snap) {
         var list = [];
         snap.forEach(function(doc) {
           var cd = doc.data();
-          list.push({
-            docId: doc.id,
-            name: cd.name || 'کاربر',
-            email: cd.email || doc.id,
-            balanceToman: Number(cd.balanceToman) || 0,
-            solWallet: cd.solWallet || '',
-            ethWallet: cd.ethWallet || '',
-            prizesList: Array.isArray(cd.prizesList) ? cd.prizesList : []
-          });
+          list.push({ docId: doc.id, name: cd.name || 'کاربر', email: cd.email || doc.id, balanceToman: Number(cd.balanceToman) || 0, solWallet: cd.solWallet || '', ethWallet: cd.ethWallet || '', prizesList: Array.isArray(cd.prizesList) ? cd.prizesList : [] });
         });
         renderUsersHtml(list);
-      }).catch(function(err) {
-        box.innerHTML = '<div style="color:#f43f5e; padding:10px;">خطا در ارتباط با سرور: ' + err.message + '</div>';
-      });
+      }).catch(function(err) { box.innerHTML = '<div style="color:#f43f5e; padding:10px;">خطا: ' + err.message + '</div>'; });
     }
   </script>
 </body>

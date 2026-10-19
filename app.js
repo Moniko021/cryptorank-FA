@@ -5,10 +5,19 @@ let currentPage = 'home';
 let wheelDeg = 0;
 let isSpinning = false;
 let busyTasks = {};
+let userTaskSubmissions = {};
 let cloudDrops = [];
 let cloudTasks = [];
 let logoTapCount = 0;
 let logoTapTimer = null;
+
+const CR_EMAILJS_KEY = '8ajZprWhO5Ui9IvfD';
+const CR_EMAILJS_SERVICE = 'service_wgdnhlj';
+const CR_EMAILJS_TEMPLATE = 'template_f4xspnv';
+let crGeneratedOTP = null;
+let crPendingUser = null;
+let crUserUnsub = null;
+let crSubmissionsUnsub = null;
 
 function safeJsonParse(key, fallback) {
   try {
@@ -23,16 +32,28 @@ function escHtml(s) {
 
 function safeUrl(u) {
   var s = String(u || '').trim();
-  if (/^https?:\/\//i.test(s)) return s;
-  return '#';
+  return /^https?:\/\//i.test(s) ? s : '#';
 }
+
+// استخراج ایمن کد دعوت (?ref=) از آدرس سایت (پشتیبانی از Base64 و ایمیل مستقیم)
+function parseReferralFromUrl() {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var rawRef = params.get('ref');
+    if (rawRef) {
+      var decoded = rawRef.includes('@') ? rawRef : atob(rawRef);
+      if (decoded && decoded.includes('@')) {
+        localStorage.setItem('cr_pending_ref', decoded.trim().toLowerCase());
+      }
+    }
+  } catch (e) {}
+  return localStorage.getItem('cr_pending_ref') || null;
+}
+let decodedRefEmail = parseReferralFromUrl();
 
 let currentUser = safeJsonParse('cr_active_user', null);
 let savedGoogleAccount = safeJsonParse('cr_saved_google_user', null);
 let savedDrops = safeJsonParse('cr_user_saved_drops', []);
-
-let crUserUnsub = null;
-
 
 const TEMP_EMAIL_DOMAINS = ['tempmail', '10minutemail', 'guerrillamail', 'yopmail', 'mailinator', 'dispostable', 'sharklasers', 'getnada', 'temp-mail', 'fakeinbox', 'maildrop'];
 function isTempEmail(email) {
@@ -54,11 +75,7 @@ const CR_WHEEL_ITEMS = [
 function handleSecretAdminTap() {
   logoTapCount++;
   if (logoTapTimer) clearTimeout(logoTapTimer);
-  if (logoTapCount >= 5) {
-    logoTapCount = 0;
-    window.location.href = 'admin.html';
-    return;
-  }
+  if (logoTapCount >= 5) { logoTapCount = 0; window.location.href = 'admin.html'; return; }
   logoTapTimer = setTimeout(function() { logoTapCount = 0; }, 1800);
 }
 
@@ -77,7 +94,6 @@ setTimeout(function() {
   var sp = document.getElementById('cr-splash');
   if (sp) { sp.style.opacity = '0'; setTimeout(function() { sp.style.display = 'none'; }, 500); }
 }, 2000);
-
 function saveToLocalVault() {
   if (currentUser && currentUser.type === 'google' && currentUser.email) {
     var cleanMail = currentUser.email.trim().toLowerCase();
@@ -88,7 +104,8 @@ function saveToLocalVault() {
       prizesList: Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [],
       completedTasks: Array.isArray(currentUser.completedTasks) ? currentUser.completedTasks : [],
       solWallet: currentUser.solWallet || '', ethWallet: currentUser.ethWallet || '',
-      savedDrops: savedDrops || [], lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null
+      savedDrops: savedDrops || [], lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
+      userIP: currentUser.userIP || null, referredBy: currentUser.referredBy || null, referralStatus: currentUser.referralStatus || null
     };
     localStorage.setItem(getVaultKey(cleanMail), JSON.stringify(data));
     localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
@@ -107,9 +124,7 @@ function syncUserToCloud() {
         completedTasks: Array.isArray(currentUser.completedTasks) ? currentUser.completedTasks : [],
         solWallet: currentUser.solWallet || '', ethWallet: currentUser.ethWallet || '',
         savedDrops: savedDrops || [], lastSpin: currentUser.lastSpin || localStorage.getItem(getSpinKey()) || null,
-        userIP: currentUser.userIP || null,
-        referredBy: currentUser.referredBy || null,
-        referralStatus: currentUser.referralStatus || null,
+        userIP: currentUser.userIP || null, referredBy: currentUser.referredBy || null, referralStatus: currentUser.referralStatus || null,
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch(function(){});
     }
@@ -128,10 +143,26 @@ function loadUserFromCloud(email) {
       if (Array.isArray(d.completedTasks)) currentUser.completedTasks = d.completedTasks;
       if (d.solWallet !== undefined) currentUser.solWallet = d.solWallet;
       if (d.ethWallet !== undefined) currentUser.ethWallet = d.ethWallet;
+      if (d.referredBy !== undefined) currentUser.referredBy = d.referredBy;
+      if (d.referralStatus !== undefined) currentUser.referralStatus = d.referralStatus;
       if (Array.isArray(d.savedDrops)) { savedDrops = d.savedDrops; localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops)); }
       if (d.lastSpin) { currentUser.lastSpin = String(d.lastSpin); localStorage.setItem(getSpinKey(), String(d.lastSpin)); }
       saveToLocalVault(); updateUserHeader(); renderProfilePage();
     }
+  }, function(){});
+}
+
+function listenToUserSubmissions() {
+  if (typeof db === 'undefined' || !currentUser || currentUser.type !== 'google' || !currentUser.email) return;
+  loadUserFromCloud(currentUser.email);
+  if (crSubmissionsUnsub) { crSubmissionsUnsub(); crSubmissionsUnsub = null; }
+  crSubmissionsUnsub = db.collection("task_submissions").where("email", "==", currentUser.email.trim().toLowerCase()).onSnapshot(function(snap) {
+    userTaskSubmissions = {};
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      if (d.taskId) userTaskSubmissions[String(d.taskId)] = d.status;
+    });
+    renderUserTasksBox();
   }, function(){});
 }
 
@@ -146,8 +177,7 @@ function updateSavedGoogleButtonUI() {
 }
 
 function initAuth() {
-  // ورود مخفی ناشناس برای اینکه دیتابیس قفل نباشد
-  firebase.auth().signInAnonymously().then(function() {
+  var startSession = function() {
     updateSavedGoogleButtonUI();
     if (currentUser && currentUser.type === 'google' && currentUser.email) {
       var vd = safeJsonParse(getVaultKey(currentUser.email), null);
@@ -158,38 +188,28 @@ function initAuth() {
         if (vd.solWallet) currentUser.solWallet = vd.solWallet;
         if (vd.ethWallet) currentUser.ethWallet = vd.ethWallet;
       } else { currentUser.balanceToman = 0; }
-      // بررسی لینک رفرال در پس‌زمینه
       if (decodedRefEmail && decodedRefEmail !== currentUser.email && !currentUser.referredBy && (!currentUser.balanceToman || currentUser.balanceToman === 0)) {
         currentUser.referredBy = decodedRefEmail.toLowerCase();
         currentUser.referralStatus = 'pending';
         syncUserToCloud();
       }
-      updateUserHeader(); listenToUserSubmissions(); 
+      updateUserHeader(); listenToUserSubmissions();
       if (!currentUser.userIP) {
-        fetchUserIP().then(function(ip) { if(ip && ip !== 'نامشخص') { currentUser.userIP = ip; syncUserToCloud(); } });
+        fetchUserIP().then(function(ip) { if (ip && ip !== 'نامشخص') { currentUser.userIP = ip; syncUserToCloud(); } });
       }
       return;
     }
     var authModal = document.getElementById('auth-modal');
     if (authModal && !currentUser) authModal.classList.add('show');
     updateUserHeader();
-  });
+  };
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().signInAnonymously().then(startSession).catch(startSession);
+  } else { startSession(); }
 }
-
-const CR_EMAILJS_KEY = '8ajZprWhO5Ui9IvfD';
-const CR_EMAILJS_SERVICE = 'service_wgdnhlj';
-const CR_EMAILJS_TEMPLATE = 'template_f4xspnv';
-let crGeneratedOTP = null;
-let crPendingUser = null;
-
-function updateSavedGoogleButtonUI() {
-  var savedBtn = document.getElementById('saved-google-btn'), savedTxt = document.getElementById('saved-google-txt');
-  if (savedBtn && savedTxt) {
-    if (savedGoogleAccount && savedGoogleAccount.email) {
-      savedBtn.style.display = 'flex';
-      savedTxt.innerText = 'ادامه با ' + savedGoogleAccount.name + ' (' + savedGoogleAccount.email + ')';
-    } else { savedBtn.style.display = 'none'; }
-  }
+function closeAuthModal() {
+  if (!currentUser) loginAnonymously();
+  else document.getElementById('auth-modal').classList.remove('show');
 }
 
 function quickGoogleLogin() {
@@ -197,6 +217,7 @@ function quickGoogleLogin() {
   currentUser = Object.assign({}, savedGoogleAccount);
   savedDrops = safeJsonParse(getVaultKey(currentUser.email), {}).savedDrops || [];
   localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+  localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
   document.getElementById('auth-modal').classList.remove('show');
   initAuth(); renderLists(); renderProfilePage();
 }
@@ -225,8 +246,7 @@ function resetOtpStep() {
 
 async function fetchUserIP() {
   try {
-    var res = await fetch('https://ipapi.co/json/');
-    var data = await res.json();
+    var res = await fetch('https://ipapi.co/json/'), data = await res.json();
     return data.ip || 'نامشخص';
   } catch (e) { return 'نامشخص'; }
 }
@@ -235,8 +255,10 @@ async function sendVerificationCode() {
   var name = document.getElementById('g-name').value.trim();
   var email = document.getElementById('g-email').value.trim().toLowerCase();
   if (!name || !email || !email.includes('@')) return alert('لطفاً نام و آدرس جیمیل معتبر وارد کنید.');
-  if (isTempEmail(email)) return alert('⛔ استفاده از ایمیل‌های موقت (فیک) مجاز نیست. لطفاً از جیمیل اصلی خود استفاده کنید.');
-  
+  if (isTempEmail(email)) return alert('⛔ استفاده از ایمیل‌های موقت مجاز نیست. لطفاً از جیمیل اصلی خود استفاده کنید.');
+  var lastOtp = Number(sessionStorage.getItem('cr_otp_ts') || 0);
+  if (Date.now() - lastOtp < 30000) return alert('⏳ لطفاً ۳۰ ثانیه صبر کنید.');
+
   crGeneratedOTP = Math.floor(100000 + Math.random() * 900000).toString();
   crPendingUser = { name: name, email: email };
   var btn = document.getElementById('send-otp-btn');
@@ -248,54 +270,78 @@ async function sendVerificationCode() {
       otp_code: crGeneratedOTP, code: crGeneratedOTP, title: 'کد تایید: ' + crGeneratedOTP,
       message: 'کد تایید ورود شما به crypto4youFA: ' + crGeneratedOTP
     });
+    sessionStorage.setItem('cr_otp_ts', String(Date.now()));
     document.getElementById('otp-step-1').style.display = 'none';
     document.getElementById('otp-step-2').style.display = 'block';
     document.getElementById('otp-email-preview').innerText = email;
-  } catch (err) { 
-    alert('خطا در ارسال ایمیل. اما کد شما این است: ' + crGeneratedOTP); 
-    document.getElementById('otp-step-1').style.display = 'none';
-    document.getElementById('otp-step-2').style.display = 'block';
-    document.getElementById('otp-email-preview').innerText = email;
-  }
-  finally { btn.innerText = '📨 ارسال کد تایید به جیمیل'; btn.disabled = false; }
+  } catch (err) {
+    alert('خطا در ارسال ایمیل تایید. لطفاً اتصال اینترنت خود را بررسی کنید.');
+  } finally { btn.innerText = '📨 ارسال کد تایید به جیمیل'; btn.disabled = false; }
 }
 
-function verifyAndLogin() {
+async function verifyAndLogin() {
   if (!crPendingUser || !crPendingUser.email) return resetOtpStep();
   var code = document.getElementById('g-otp-code').value.trim();
   if (!crGeneratedOTP || code !== crGeneratedOTP) return alert('❌ کد وارد شده اشتباه است!');
-  
+  crGeneratedOTP = null;
   var cleanEmail = crPendingUser.email.trim().toLowerCase();
   var k = getDocKey(cleanEmail), vKey = getVaultKey(cleanEmail);
   var bal = 0, pList = [], cTasks = [], solW = '', ethW = '', drops = [], lSpin = localStorage.getItem('cr_spin_' + k) || null;
+  var refBy = null, refStat = null;
 
   var vd = safeJsonParse(vKey, null);
-  if (vd) {
+  if (vd && vd.sig === calcSig(cleanEmail, vd.balanceToman)) {
     bal = Number(vd.balanceToman) || 0;
     if (Array.isArray(vd.prizesList)) pList = vd.prizesList;
     if (Array.isArray(vd.completedTasks)) cTasks = vd.completedTasks;
     solW = vd.solWallet || ''; ethW = vd.ethWallet || '';
     if (Array.isArray(vd.savedDrops)) drops = vd.savedDrops;
     if (vd.lastSpin) lSpin = String(vd.lastSpin);
+    refBy = vd.referredBy || null; refStat = vd.referralStatus || null;
   }
 
-  currentUser = { type: 'google', name: crPendingUser.name, email: cleanEmail, balanceToman: bal, prizesList: pList, completedTasks: cTasks, solWallet: solW, ethWallet: ethW, lastSpin: lSpin };
-  if (!currentUser.userIP) { fetchUserIP().then(function(ip) { currentUser.userIP = ip; syncUserToCloud(); }); }
+  if (typeof db !== 'undefined') {
+    try {
+      var doc = await db.collection("users").doc(k).get();
+      if (doc.exists) {
+        var d = doc.data();
+        bal = Number(d.balanceToman) || 0;
+        if (Array.isArray(d.prizesList)) pList = d.prizesList;
+        if (Array.isArray(d.completedTasks)) cTasks = d.completedTasks;
+        if (d.solWallet) solW = d.solWallet;
+        if (d.ethWallet) ethW = d.ethWallet;
+        if (Array.isArray(d.savedDrops)) drops = d.savedDrops;
+        if (d.lastSpin) lSpin = String(d.lastSpin);
+        if (d.referredBy) refBy = d.referredBy;
+        if (d.referralStatus) refStat = d.referralStatus;
+      }
+    } catch (err) {}
+  }
+
+  if (decodedRefEmail && decodedRefEmail !== cleanEmail && !refBy && bal === 0) {
+    refBy = decodedRefEmail.toLowerCase();
+    refStat = 'pending';
+  }
+
+  currentUser = { type: 'google', name: crPendingUser.name, email: cleanEmail, balanceToman: bal, prizesList: pList, completedTasks: cTasks, solWallet: solW, ethWallet: ethW, lastSpin: lSpin, referredBy: refBy, referralStatus: refStat };
+  fetchUserIP().then(function(ip) { currentUser.userIP = ip; syncUserToCloud(); });
   savedGoogleAccount = Object.assign({}, currentUser);
   savedDrops = drops;
   localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
   if (lSpin) localStorage.setItem(getSpinKey(), lSpin);
-  
-  saveToLocalVault(); 
+
+  saveToLocalVault(); syncUserToCloud(); listenToUserSubmissions();
   document.getElementById('auth-modal').classList.remove('show');
-  updateUserHeader(); renderLists(); listenToUserSubmissions(); renderProfilePage();
-  openPage('home'); // انتقال کاربر به صفحه اصلی
+  updateUserHeader(); renderLists(); renderProfilePage(); openPage('home');
 }
 
 function loginAnonymously() {
+  if (crUserUnsub) { crUserUnsub(); crUserUnsub = null; }
+  if (crSubmissionsUnsub) { crSubmissionsUnsub(); crSubmissionsUnsub = null; }
   currentUser = { type: 'anon', name: 'کاربر ناشناس', email: 'بدون ایمیل (حالت مهمان)', balanceToman: 0 };
   savedDrops = [];
   localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+  localStorage.setItem('cr_user_saved_drops', '[]');
   document.getElementById('auth-modal').classList.remove('show');
   updateUserHeader(); renderLists();
 }
@@ -303,17 +349,13 @@ function loginAnonymously() {
 function switchAccount() {
   closeModal();
   if (crUserUnsub) { crUserUnsub(); crUserUnsub = null; }
+  if (crSubmissionsUnsub) { crSubmissionsUnsub(); crSubmissionsUnsub = null; }
   localStorage.removeItem('cr_active_user');
-  currentUser = null; savedDrops = [];
+  currentUser = null; savedDrops = []; userTaskSubmissions = {};
   localStorage.setItem('cr_user_saved_drops', '[]');
   hideGoogleForm(); resetOtpStep(); updateSavedGoogleButtonUI(); updateUserHeader();
   document.getElementById('auth-modal').classList.add('show');
 }
-
-function getSpinKey() {
-  return (currentUser && currentUser.type === 'google' && currentUser.email) ? 'cr_spin_' + getDocKey(currentUser.email) : 'cr_spin_guest';
-}
-
 function updateUserHeader() {
   var avatarEl = document.getElementById('header-user-avatar'), nameEl = document.getElementById('header-user-name');
   if (!avatarEl || !nameEl) return;
@@ -364,9 +406,60 @@ function setupWheelAndTasksDOM() {
       '</div>' +
     '</div>' +
     '<button id="wheel-spin-btn" class="spin-btn" onclick="spinWheel()">🎯 چرخاندن گردونه شانس</button>' +
-    '<div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:12px;line-height:1.8;background:#0b0e14;padding:10px 12px;border-radius:12px;border:1px solid #1e2433;">' +
-      'جوایز در حساب کاربری ذخیره میشه هر جمعه به حساب کاربر ها واریز میشه جوایز میتونه نقدی یا به صورت ارز دیجیتال واریز بشه' +
+    '<div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:12px;line-height:1.8;background:#0b0e14;padding:10px 12px;border-radius:12px;border:1px solid #1e2433;">جوایز در حساب کاربری ذخیره میشه هر جمعه به حساب کاربر ها واریز میشه جوایز میتونه نقدی یا به صورت ارز دیجیتال واریز بشه</div>' +
+
+cd ~/cryptorank && cat << 'EOF' >> app.js
+function updateUserHeader() {
+  var avatarEl = document.getElementById('header-user-avatar'), nameEl = document.getElementById('header-user-name');
+  if (!avatarEl || !nameEl) return;
+  if (currentUser && currentUser.type === 'google') {
+    avatarEl.innerText = currentUser.name.charAt(0).toUpperCase();
+    avatarEl.style.background = '#10b981'; nameEl.innerText = currentUser.name;
+  } else {
+    avatarEl.innerText = '🕶️'; avatarEl.style.background = '#3b82f6'; nameEl.innerText = 'ناشناس';
+  }
+  renderUserTasksBox();
+}
+
+function openPage(p) {
+  currentPage = p;
+  ['home','news','drops','vcs','unlocks','converter','profile'].forEach(function(x) {
+    var pg = document.getElementById('page-' + x), st = document.getElementById('st-' + x);
+    if (pg) pg.classList.remove('active');
+    if (st) st.classList.remove('active');
+  });
+  var targetPg = document.getElementById('page-' + p), activeSt = document.getElementById('st-' + p);
+  if (targetPg) targetPg.classList.add('active');
+  if (activeSt) activeSt.classList.add('active');
+  if (p === 'profile') renderProfilePage();
+  window.scrollTo(0, 0);
+}
+
+function openProfileModal() { openPage('profile'); }
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+function setupWheelAndTasksDOM() {
+  var wheelSec = document.querySelector('.wheel-section');
+  if (!wheelSec || document.getElementById('wheel-8-done')) return;
+  var degs = [-67.5, -22.5, 22.5, 67.5, 112.5, 157.5, 202.5, 247.5];
+  var cols = ['#000', '#fff', '#fff', '#fff', '#cbd5e1', '#fff', '#fff', '#000'];
+  var slices = '';
+  for (var i = 0; i < 8; i++) {
+    var fSize = (i === 3) ? '18px' : '11px';
+    slices += '<div style="position:absolute;top:50%;left:50%;width:122px;height:24px;margin-top:-12px;transform-origin:0 50%;transform:rotate(' + degs[i] + 'deg);text-align:right;padding-right:12px;font-size:' + fSize + ';font-weight:900;color:' + cols[i] + ';direction:ltr;line-height:24px;">' + CR_WHEEL_ITEMS[i].short + '</div>';
+  }
+  wheelSec.innerHTML =
+    '<div id="wheel-8-done" style="font-size:17px;font-weight:900;color:#fff;">🎡 گردونه میلیونی روزانه</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-top:4px;">هر ۲۴ ساعت یک‌بار گردونه را بچرخانید و جایزه ببرید!</div>' +
+    '<div style="width:260px;height:260px;margin:18px auto;position:relative;">' +
+      '<div style="position:absolute;top:-18px;left:0;right:0;text-align:center;font-size:28px;z-index:25;">🔻</div>' +
+      '<div id="wheel-el" style="width:100%;height:100%;border-radius:50%;position:relative;overflow:hidden;border:5px solid #2a324b;box-shadow:0 0 25px rgba(59,130,246,0.35);transition:transform 4s cubic-bezier(0.15, 0.85, 0.15, 1);background:conic-gradient(#eab308 0deg 45deg, #8b5cf6 45deg 90deg, #ec4899 90deg 135deg, #f97316 135deg 180deg, #334155 180deg 225deg, #10b981 225deg 270deg, #3b82f6 270deg 315deg, #06b6d4 315deg 360deg);">' +
+        slices +
+        '<div style="position:absolute;inset:0;margin:auto;width:46px;height:46px;background:#131722;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:18px;z-index:10;">🎯</div>' +
+      '</div>' +
     '</div>' +
+    '<button id="wheel-spin-btn" class="spin-btn" onclick="spinWheel()">🎯 چرخاندن گردونه شانس</button>' +
+    '<div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:12px;line-height:1.8;background:#0b0e14;padding:10px 12px;border-radius:12px;border:1px solid #1e2433;">جوایز در حساب کاربری ذخیره میشه هر جمعه به حساب کاربر ها واریز میشه جوایز میتونه نقدی یا به صورت ارز دیجیتال واریز بشه</div>' +
     '<div id="user-cash-tasks-box" style="margin-top:16px;background:#131722;border:1px solid #22293a;border-radius:18px;padding:16px;text-align:right;"></div>';
   renderUserTasksBox();
 }
@@ -386,7 +479,6 @@ function spinWheel() {
   isSpinning = true;
   var spinBtn = document.getElementById('wheel-spin-btn');
   if (spinBtn) spinBtn.disabled = true;
-
   var st = now.toString();
   localStorage.setItem(sk, st); currentUser.lastSpin = st;
 
@@ -397,9 +489,7 @@ function spinWheel() {
     sumW += CR_WHEEL_ITEMS[j].weight;
     if (rnd <= sumW) { chosen = CR_WHEEL_ITEMS[j]; break; }
   }
-  var sliceCenter = chosen.idx * 45 + 22.5;
-  var targetMod = (360 - sliceCenter) % 360;
-  var diff = targetMod - (wheelDeg % 360);
+  var sliceCenter = chosen.idx * 45 + 22.5, targetMod = (360 - sliceCenter) % 360, diff = targetMod - (wheelDeg % 360);
   if (diff < 0) diff += 360;
   wheelDeg += 1800 + diff;
   var wEl = document.getElementById('wheel-el');
@@ -420,7 +510,6 @@ function spinWheel() {
   }, 4100);
 }
 
-// === crypto4youFA - Core (Part 2A) ===
 function renderUserTasksBox() {
   var box = document.getElementById('user-cash-tasks-box');
   if (!box) return;
@@ -434,8 +523,16 @@ function renderUserTasksBox() {
     tasksHtml = '<div style="background:#0b0e14;border:1px dashed #334155;border-radius:14px;padding:16px;text-align:center;"><div style="font-size:24px;margin-bottom:6px;">💰</div><div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:4px;">بخش تسک‌های نقدی فعال است</div><div style="font-size:11px;color:#94a3b8;line-height:1.7;">تسک‌های جدید به زودی قرار می‌گیرند.</div></div>';
   } else {
     tasksHtml = cloudTasks.map(function(t, idx) {
-      var tid = String(t.docId || t.id), isDone = doneList.includes(tid) || busyTasks[tid];
-      return '<div style="background:#0b0e14;border:1px solid #1e2433;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:800;color:#fff;">🎯 ' + escHtml(t.title) + '</div><div style="font-size:11px;color:#10b981;margin-top:3px;">پاداش: +' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div></div>' + (isDone ? '<span style="font-size:11px;color:#10b981;font-weight:bold;background:rgba(16,185,129,0.12);padding:6px 10px;border-radius:8px;">✅ انجام شد</span>' : '<button onclick="completeCashTaskByIdx(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">انجام تسک 〈</button>') + '</div>';
+      var tid = String(t.docId || t.id);
+      var subStat = userTaskSubmissions[tid];
+      var isDone = doneList.includes(tid) || subStat === 'approved';
+      var isPending = subStat === 'pending' || busyTasks[tid];
+      var btnHtml = isDone
+        ? '<span style="font-size:11px;color:#10b981;font-weight:bold;background:rgba(16,185,129,0.12);padding:6px 10px;border-radius:8px;">✅ انجام شد</span>'
+        : (isPending
+            ? '<span style="font-size:11px;color:#eab308;font-weight:bold;background:rgba(234,179,8,0.12);padding:6px 10px;border-radius:8px;">⏳ در انتظار تایید</span>'
+            : '<button onclick="completeCashTaskByIdx(' + idx + ')" style="background:#3b82f6;color:#fff;border:none;padding:8px 12px;border-radius:10px;font-size:11px;font-weight:bold;cursor:pointer;flex-shrink:0;">انجام تسک 〈</button>');
+      return '<div style="background:#0b0e14;border:1px solid #1e2433;border-radius:12px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><div style="font-size:13px;font-weight:800;color:#fff;">🎯 ' + escHtml(t.title) + '</div><div style="font-size:11px;color:#10b981;margin-top:3px;">پاداش: +' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div></div>' + btnHtml + '</div>';
     }).join('');
   }
   box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e2433;padding-bottom:10px;margin-bottom:12px;"><div><div style="font-size:15px;font-weight:900;color:#10b981;">🎯 تسک‌های پاداش نقدی (' + escHtml(currentUser.name) + ')</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">حساب: <span style="color:#60a5fa;direction:ltr;display:inline-block;">' + escHtml(currentUser.email) + '</span></div></div><span class="badge" style="background:rgba(16,185,129,0.15);color:#10b981;">' + doneList.length + ' انجام‌شده</span></div>' + tasksHtml;
@@ -446,59 +543,111 @@ function completeCashTaskByIdx(idx) {
   var t = cloudTasks[idx];
   if (!t) return;
   var taskId = String(t.docId || t.id);
-  if (!Array.isArray(currentUser.completedTasks)) currentUser.completedTasks = [];
-  if (currentUser.completedTasks.includes(taskId) || busyTasks[taskId]) return;
-  
-  if (!confirm('آیا شما واقعاً این تسک را انجام داده‌اید؟ (در صورت عدم انجام، اکانت شما مسدود خواهد شد)')) return;
-
-  busyTasks[taskId] = true;
-  currentUser.completedTasks.push(taskId);
-  renderUserTasksBox();
+  if (busyTasks[taskId]) return;
   var url = safeUrl(t.link);
-  if (url !== '#') window.open(url, '_blank');
-  var reward = Number(t.reward) || 0;
-  
-  setTimeout(function() {
-    currentUser.balanceToman = (Number(currentUser.balanceToman) || 0) + reward;
-    if (!Array.isArray(currentUser.prizesList)) currentUser.prizesList = [];
-    currentUser.prizesList.unshift({ title: 'تسک: ' + t.title + ' (' + reward.toLocaleString('fa-IR') + ' ت)', amount: reward, date: new Date().toLocaleDateString('fa-IR') });
-    syncUserToCloud(); renderUserTasksBox(); renderProfilePage();
-    alert('✅ تبریک! پاداش تسک (' + reward.toLocaleString('fa-IR') + ' تومان) اضافه شد.');
-  }, 3000);
+  document.getElementById('modal-body').innerHTML =
+    '<h3 style="font-size:16px;font-weight:900;margin-bottom:8px;">🎯 ' + escHtml(t.title) + '</h3>' +
+    '<div style="font-size:12px;color:#10b981;font-weight:bold;margin-bottom:12px;">پاداش: ' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div>' +
+    '<div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">۱. ابتدا از طریق دکمه زیر وارد لینک تسک شوید و آن را انجام دهید.<br>۲. سپس نام کاربری، آیدی تلگرام یا توضیح انجام تسک را به عنوان مدرک در کادر زیر بنویسید تا پس از تایید مدیر، پاداش به حساب شما واریز شود:</div>' +
+    (url !== '#' ? '<a href="' + escHtml(url) + '" target="_blank" rel="noopener noreferrer" class="spin-btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:12px;background:#3b82f6;">🔗 باز کردن لینک تسک</a>' : '') +
+    '<input id="task-proof-inp" class="inp" type="text" placeholder="مدرک انجام تسک (مثلاً آیدی @username)...">' +
+    '<button onclick="submitTaskProof(' + idx + ')" class="spin-btn" style="width:100%;background:#10b981;margin-bottom:8px;">📤 ارسال مدرک برای تایید مدیر</button>' +
+    '<button onclick="closeModal()" style="width:100%;background:#222838;color:#fff;border:none;padding:10px;border-radius:12px;cursor:pointer;">بستن</button>';
+  document.getElementById('modal').classList.add('show');
+}
+
+function submitTaskProof(idx) {
+  var t = cloudTasks[idx];
+  if (!t || !currentUser || currentUser.type !== 'google') return;
+  var proofInp = document.getElementById('task-proof-inp');
+  var proof = proofInp ? proofInp.value.trim() : '';
+  if (!proof) return alert('لطفاً مدرک انجام تسک (مثلاً آیدی یا نام کاربری خود) را وارد کنید.');
+  var taskId = String(t.docId || t.id);
+  busyTasks[taskId] = true;
+  userTaskSubmissions[taskId] = 'pending';
+  closeModal(); renderUserTasksBox();
+  if (typeof db !== 'undefined') {
+    db.collection("task_submissions").add({
+      taskId: taskId, taskTitle: t.title || 'تسک نقدی', reward: Number(t.reward) || 0,
+      name: currentUser.name, email: currentUser.email.trim().toLowerCase(),
+      proof: proof, status: 'pending', createdAt: new Date().toISOString()
+    }).then(function() {
+      alert('✅ مدرک شما با موفقیت ثبت شد و پس از تایید مدیر، پاداش به موجودی شما اضافه می‌شود.');
+    }).catch(function(err) {
+      busyTasks[taskId] = false;
+      alert('خطا در ارسال مدرک: ' + err.message);
+    });
+  }
 }
 function renderProfilePage() {
   var c = document.getElementById('profile-page-container');
   if (!c) return;
   if (!currentUser || currentUser.type !== 'google') {
-    c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px 18px;text-align:center;margin-top:14px;"><div style="font-size:40px;">🔐</div><div style="font-size:15px;font-weight:900;margin:8px 0;">پروفایل حساب کاربری</div><div style="font-size:12px;color:var(--muted);margin-bottom:16px;">برای مشاهده جوایز و ثبت کیف پول، با جیمیل وارد شوید.</div><button onclick="switchAccount()" class="spin-btn" style="width:100%;max-width:260px;">📧 ورود با جیمیل</button></div>';
+    c.innerHTML =
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px 18px;text-align:center;margin-top:14px;">' +
+        '<div style="font-size:40px;">🔐</div>' +
+        '<div style="font-size:15px;font-weight:900;margin:8px 0;">پروفایل حساب کاربری</div>' +
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:16px;">برای مشاهده جوایز و ثبت کیف پول، با جیمیل وارد شوید.</div>' +
+        '<button onclick="switchAccount()" class="spin-btn" style="width:100%;max-width:260px;">📧 ورود با جیمیل</button>' +
+      '</div>';
     return;
   }
   var bal = (Number(currentUser.balanceToman) || 0).toLocaleString('fa-IR');
   var pList = Array.isArray(currentUser.prizesList) ? currentUser.prizesList : [];
-  var hist = pList.length ? pList.map(function(p){ return '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;"><span style="color:#10b981;font-weight:bold;">🎁 ' + escHtml(p.title) + '</span><span style="color:var(--muted);">' + escHtml(p.date) + '</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز جایزه‌ای دریافت نکرده‌اید.</div>';
-  
-  var savedHtml = savedDrops.length ? savedDrops.map(function(name){ return '<div style="background:#1e2433;padding:8px 12px;border-radius:10px;margin-bottom:6px;font-size:12px;color:#60a5fa;display:flex;justify-content:space-between;"><span>🪂 ' + escHtml(name) + '</span><span style="color:#10b981;">⭐ ذخیره شده</span></div>'; }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز ایردراپی ذخیره نکرده‌اید.</div>';
+  var hist = pList.length ? pList.map(function(p) {
+    return '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;">' +
+      '<span style="color:#10b981;font-weight:bold;">🎁 ' + escHtml(p.title) + '</span>' +
+      '<span style="color:var(--muted);">' + escHtml(p.date) + '</span>' +
+    '</div>';
+  }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز جایزه‌ای دریافت نکرده‌اید.</div>';
+
+  var savedHtml = savedDrops.length ? savedDrops.map(function(name) {
+    return '<div style="background:#1e2433;padding:8px 12px;border-radius:10px;margin-bottom:6px;font-size:12px;color:#60a5fa;display:flex;justify-content:space-between;">' +
+      '<span>🪂 ' + escHtml(name) + '</span><span style="color:#10b981;">⭐ ذخیره شده</span>' +
+    '</div>';
+  }).join('') : '<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px;">هنوز ایردراپی ذخیره نکرده‌اید.</div>';
 
   var refCode = btoa(currentUser.email).replace(/=/g, '');
   var refLink = 'https://crypto4youfa.com/?ref=' + refCode;
-  var referralHtml = '<div style="background:#131824;border:1px solid #334155;padding:14px;border-radius:14px;margin-bottom:14px;">' +
+  var referralHtml =
+    '<div style="background:#131824;border:1px solid #334155;padding:14px;border-radius:14px;margin-bottom:14px;">' +
       '<div style="font-size:13px;font-weight:900;color:#eab308;margin-bottom:8px;">🎁 دعوت از دوستان (۱۰,۰۰۰ تومان هدیه)</div>' +
       '<div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6;">لینک زیر را برای دوستان خود بفرستید. به ازای هر ثبت‌نام موفق و واقعی که توسط مدیر تایید شود، ۱۰ هزار تومان هدیه بگیرید.</div>' +
-      '<input type="text" value="' + refLink + '" readonly style="width:100%;background:#0b0e14;border:1px solid #3b82f6;color:#60a5fa;padding:10px;border-radius:8px;font-size:11px;margin-bottom:8px;direction:ltr;text-align:left;" id="ref-link-inp">' +
+      '<input type="text" value="' + escHtml(refLink) + '" readonly style="width:100%;background:#0b0e14;border:1px solid #3b82f6;color:#60a5fa;padding:10px;border-radius:8px;font-size:11px;margin-bottom:8px;direction:ltr;text-align:left;" id="ref-link-inp">' +
       '<button onclick="copyRefLink()" style="width:100%;background:#3b82f6;color:#fff;border:none;padding:10px;border-radius:8px;font-weight:bold;cursor:pointer;margin-bottom:10px;">📋 کپی لینک دعوت</button>' +
       '<div id="user-referrals-list" style="font-size:11px;color:var(--muted);line-height:1.8;"></div>' +
     '</div>';
 
-  c.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-top:10px;"><div style="font-size:17px;font-weight:900;">👤 ' + escHtml(currentUser.name) + '</div><div style="font-size:12px;color:#60a5fa;direction:ltr;text-align:right;margin-bottom:14px;">' + escHtml(currentUser.email) + '</div><div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;"><div style="font-size:11px;color:#94a3b8;">💰 موجودی جوایز و تسک‌ها (واریز هر جمعه):</div><div style="font-size:22px;font-weight:900;color:#10b981;margin-top:4px;">' + bal + ' تومان</div></div>' + referralHtml + '<div style="background:#131824;padding:12px;border-radius:14px;margin-bottom:14px;"><div style="font-size:12px;font-weight:900;color:#60a5fa;margin-bottom:8px;">💳 ثبت آدرس کیف پول (سولانا / اتریوم)</div><input id="inp-sol-wallet" class="inp" type="text" value="' + escHtml(currentUser.solWallet||'') + '" placeholder="آدرس کیف پول Solana..." style="direction:ltr;text-align:left;"><input id="inp-eth-wallet" class="inp" type="text" value="' + escHtml(currentUser.ethWallet||'') + '" placeholder="آدرس کیف پول Ethereum (0x)..." style="direction:ltr;text-align:left;"><button onclick="saveUserWallets()" class="spin-btn" style="width:100%;background:#10b981;">💾 ذخیره کیف پول در حساب</button></div><div style="font-size:13px;font-weight:900;margin-bottom:8px;">⭐ ایردراپ‌های ذخیره شده:</div>' + savedHtml + '<div style="font-size:13px;font-weight:900;margin-top:14px;margin-bottom:8px;">🏆 تاریخچه جوایز و پاداش‌ها:</div>' + hist + '<button onclick="switchAccount()" style="width:100%;background:#ef4444;color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-top:12px;cursor:pointer;">🚪 خروج / تغییر جیمیل</button></div>';
-  
+  c.innerHTML =
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:18px;margin-top:10px;">' +
+      '<div style="font-size:17px;font-weight:900;">👤 ' + escHtml(currentUser.name) + '</div>' +
+      '<div style="font-size:12px;color:#60a5fa;direction:ltr;text-align:right;margin-bottom:14px;">' + escHtml(currentUser.email) + '</div>' +
+      '<div style="background:#0f172a;border:1px solid #334155;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px;">' +
+        '<div style="font-size:11px;color:#94a3b8;">💰 موجودی جوایز و تسک‌ها (واریز هر جمعه):</div>' +
+        '<div style="font-size:22px;font-weight:900;color:#10b981;margin-top:4px;">' + bal + ' تومان</div>' +
+      '</div>' +
+      referralHtml +
+      '<div style="background:#131824;padding:12px;border-radius:14px;margin-bottom:14px;">' +
+        '<div style="font-size:12px;font-weight:900;color:#60a5fa;margin-bottom:8px;">💳 ثبت آدرس کیف پول (سولانا / اتریوم)</div>' +
+        '<input id="inp-sol-wallet" class="inp" type="text" value="' + escHtml(currentUser.solWallet || '') + '" placeholder="آدرس کیف پول Solana..." style="direction:ltr;text-align:left;">' +
+        '<input id="inp-eth-wallet" class="inp" type="text" value="' + escHtml(currentUser.ethWallet || '') + '" placeholder="آدرس کیف پول Ethereum (0x)..." style="direction:ltr;text-align:left;">' +
+        '<button onclick="saveUserWallets()" class="spin-btn" style="width:100%;background:#10b981;">💾 ذخیره کیف پول در حساب</button>' +
+      '</div>' +
+      '<div style="font-size:13px;font-weight:900;margin-bottom:8px;">⭐ ایردراپ‌های ذخیره شده:</div>' + savedHtml +
+      '<div style="font-size:13px;font-weight:900;margin-top:14px;margin-bottom:8px;">🏆 تاریخچه جوایز و پاداش‌ها:</div>' + hist +
+      '<button onclick="switchAccount()" style="width:100%;background:#ef4444;color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-top:12px;cursor:pointer;">🚪 خروج / تغییر جیمیل</button>' +
+    '</div>';
   loadReferredUsers();
 }
 
 function copyRefLink() {
   var inp = document.getElementById('ref-link-inp');
   if (!inp) return;
-  inp.select(); inp.setSelectionRange(0, 99999);
-  navigator.clipboard.writeText(inp.value).then(function() { alert('✅ لینک دعوت کپی شد!'); });
+  navigator.clipboard.writeText(inp.value).then(function() {
+    alert('✅ لینک دعوت کپی شد!');
+  }).catch(function() {
+    prompt('کپی کنید:', inp.value);
+  });
 }
 
 function loadReferredUsers() {
@@ -513,10 +662,13 @@ function loadReferredUsers() {
       var d = doc.data();
       var status = d.referralStatus === 'approved' ? '✅ تایید شده (+۱۰,۰۰۰)' : (d.referralStatus === 'rejected' ? '❌ رد شده' : '⏳ در انتظار تایید');
       var color = d.referralStatus === 'approved' ? '#10b981' : (d.referralStatus === 'rejected' ? '#f43f5e' : '#eab308');
-      html += '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:6px 8px;border-radius:6px;margin-bottom:4px;"><span style="direction:ltr;">' + escHtml(d.email || doc.id) + '</span><span style="color:' + color + ';font-weight:bold;">' + status + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;background:#0b0e14;padding:6px 8px;border-radius:6px;margin-bottom:4px;">' +
+        '<span style="direction:ltr;">' + escHtml(d.email || doc.id) + '</span>' +
+        '<span style="color:' + color + ';font-weight:bold;">' + status + '</span>' +
+      '</div>';
     });
     box.innerHTML = html;
-  });
+  }).catch(function() { box.innerHTML = ''; });
 }
 
 function saveUserWallets() {
@@ -526,10 +678,10 @@ function saveUserWallets() {
   syncUserToCloud();
   alert('✅ کیف پول شما در حساب (' + currentUser.email + ') ذخیره شد!');
 }
-
 let newsList = [];
 window.crCloudNews = [];
 window.crLiveApiNews = [];
+window.crMarketLiveNews = [];
 
 function fetchCloudData() {
   if (typeof db === "undefined") return;
@@ -547,9 +699,12 @@ function fetchCloudData() {
 
 async function fetchGlobalIndicators() {
   try {
-    var res = await fetch('https://api.alternative.me/fng/?limit=1'), data = await res.json();
+    var res = await fetch('https://api.alternative.me/fng/?limit=1');
+    var data = await res.json();
     if (data && data.data && data.data[0]) {
-      var val = parseInt(data.data[0].value), numEl = document.querySelector('.gauge-num'), lblEl = document.querySelector('.gauge-lbl');
+      var val = parseInt(data.data[0].value);
+      var numEl = document.querySelector('.gauge-num');
+      var lblEl = document.querySelector('.gauge-lbl');
       if (numEl) numEl.innerText = val;
       if (lblEl) {
         if (val >= 55) { lblEl.innerText = 'طمع (صعودی)'; lblEl.style.color = '#10b981'; }
@@ -559,9 +714,12 @@ async function fetchGlobalIndicators() {
     }
   } catch (err) {}
   try {
-    var resG = await fetch('https://api.coingecko.com/api/v3/global'), dataG = await resG.json();
+    var resG = await fetch('https://api.coingecko.com/api/v3/global');
+    var dataG = await resG.json();
     if (dataG && dataG.data && dataG.data.market_cap_percentage) {
-      var btcDom = dataG.data.market_cap_percentage.btc, domEl = document.getElementById('btc-dom'), chgEl = document.getElementById('btc-dom-chg');
+      var btcDom = dataG.data.market_cap_percentage.btc;
+      var domEl = document.getElementById('btc-dom');
+      var chgEl = document.getElementById('btc-dom-chg');
       if (domEl && btcDom) domEl.innerText = btcDom.toFixed(2) + '%';
       if (chgEl && dataG.data.market_cap_change_percentage_24h_usd !== undefined) {
         var mcChg = dataG.data.market_cap_change_percentage_24h_usd;
@@ -578,49 +736,83 @@ async function fetchMarket() {
   isFetchingMarket = true;
   fetchGlobalIndicators();
   var statusBadge = document.getElementById('market-status-badge');
-  
+  var cached = safeJsonParse('cr_cached_coins', []);
+  if (cached.length && !coins.length) {
+    coins = cached;
+    renderTopCards(); renderFullList(); updateGainersLosersPreview(); populateConverter(); updateLiveAutoUnlocks();
+  }
   try {
     var r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=true');
     var d = await r.json();
     if (d && Array.isArray(d) && d.length > 0) {
       coins = d.map(function(item) {
         return {
-          id: item.id,
-          symbol: item.symbol.toLowerCase(),
-          name: item.name,
-          image: item.image,
+          id: item.id, symbol: item.symbol.toLowerCase(), name: item.name, image: item.image,
           current_price: Number(item.current_price) || 1,
           price_change_percentage_24h: Number(item.price_change_percentage_24h) || 0,
           market_cap_rank: item.market_cap_rank,
-          high_24h: Number(item.high_24h) || 1,
-          low_24h: Number(item.low_24h) || 1,
+          high_24h: Number(item.high_24h) || 1, low_24h: Number(item.low_24h) || 1,
           sparkline: item.sparkline_in_7d ? item.sparkline_in_7d.price : null
         };
       });
       localStorage.setItem('cr_cached_coins', JSON.stringify(coins));
       if (statusBadge) { statusBadge.innerText = '● آنلاین'; statusBadge.style.color = '#10b981'; }
       renderTopCards(); renderFullList(); updateGainersLosersPreview(); populateConverter(); updateLiveAutoUnlocks();
+      isFetchingMarket = false;
+      return;
     }
-  } catch (err) {
+  } catch (err) {}
+
+  try {
+    var r2 = await fetch('https://min-api.cryptocompare.com/data/top/mktcapfull?limit=50&tsym=USD');
+    var d2 = await r2.json();
+    if (d2 && Array.isArray(d2.Data) && d2.Data.length > 0) {
+      coins = d2.Data.map(function(item, idx) {
+        var info = item.CoinInfo || {};
+        var raw = (item.RAW && item.RAW.USD) ? item.RAW.USD : {};
+        var sym = (info.Name || 'btc').toLowerCase();
+        var p = Number(raw.PRICE) || 1;
+        var l = Number(raw.LOW24HOUR) || p * 0.98;
+        var h = Number(raw.HIGH24HOUR) || p * 1.02;
+        var o = Number(raw.OPEN24HOUR) || p;
+        return {
+          id: sym, symbol: sym, name: info.FullName || info.Name,
+          image: 'https://assets.coincap.io/assets/icons/' + sym + '@2x.png',
+          current_price: p, price_change_percentage_24h: Number(raw.CHANGEPCT24HOUR) || 0,
+          market_cap_rank: idx + 1, high_24h: h, low_24h: l, sparkline: [o, l, (o + p) / 2, h, p]
+        };
+      });
+      localStorage.setItem('cr_cached_coins', JSON.stringify(coins));
+      if (statusBadge) { statusBadge.innerText = '● آنلاین'; statusBadge.style.color = '#10b981'; }
+      renderTopCards(); renderFullList(); updateGainersLosersPreview(); populateConverter(); updateLiveAutoUnlocks();
+    }
+  } catch (err2) {
     if (statusBadge) { statusBadge.innerText = '● حالت کش'; statusBadge.style.color = '#eab308'; }
   } finally { isFetchingMarket = false; }
 }
+
 let lastRefreshClick = 0;
 function manualRefresh() {
   var now = Date.now();
   if (now - lastRefreshClick < 4000) return;
   lastRefreshClick = now;
-  document.getElementById('top-coins-cards').innerHTML = '<div class="skeleton-card"><div class="skeleton-shimmer"></div></div><div class="skeleton-card"><div class="skeleton-shimmer"></div></div><div class="skeleton-card"><div class="skeleton-shimmer"></div></div>';
-  fetchMarket(); fetchAndTranslateLiveNews();
+  document.getElementById('top-coins-cards').innerHTML =
+    '<div class="skeleton-card"><div class="skeleton-shimmer"></div></div>' +
+    '<div class="skeleton-card"><div class="skeleton-shimmer"></div></div>' +
+    '<div class="skeleton-card"><div class="skeleton-shimmer"></div></div>';
+  fetchMarket();
+  fetchAndTranslateLiveNews();
 }
-
 const FALLBACK_COIN_ICON = "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2245%22 fill=%22%233b82f6%22/><text x=%2250%22 y=%2266%22 font-size=%2245%22 text-anchor=%22middle%22 fill=%22%23fff%22>₿</text></svg>";
 
 function updateGainersLosersPreview() {
   if (!coins.length) return;
-  var sorted = [].concat(coins).sort(function(a, b) { return (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0); });
+  var sorted = [].concat(coins).sort(function(a, b) {
+    return (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0);
+  });
   var topGainer = sorted[0], topLoser = sorted[sorted.length - 1];
-  var gEl = document.getElementById('top-gainer-preview'), lEl = document.getElementById('top-loser-preview');
+  var gEl = document.getElementById('top-gainer-preview');
+  var lEl = document.getElementById('top-loser-preview');
   if (gEl && topGainer) gEl.innerText = topGainer.symbol.toUpperCase() + ': +' + (topGainer.price_change_percentage_24h || 0).toFixed(2) + '%';
   if (lEl && topLoser) lEl.innerText = topLoser.symbol.toUpperCase() + ': ' + (topLoser.price_change_percentage_24h || 0).toFixed(2) + '%';
   generateLiveMarketReports();
@@ -629,12 +821,31 @@ function updateGainersLosersPreview() {
 function openGainersLosersModal(type) {
   if (!coins.length) return;
   var isGainer = type === 'gainers';
-  var sorted = [].concat(coins).sort(function(a, b) { return isGainer ? (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0) : (a.price_change_percentage_24h || 0) - (b.price_change_percentage_24h || 0); }).slice(0, 12);
+  var sorted = [].concat(coins).sort(function(a, b) {
+    return isGainer
+      ? (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0)
+      : (a.price_change_percentage_24h || 0) - (b.price_change_percentage_24h || 0);
+  }).slice(0, 12);
   var rowsHtml = sorted.map(function(c, idx) {
-    var chg = c.price_change_percentage_24h || 0, color = chg >= 0 ? '#10b981' : '#f43f5e';
-    return '<div class="coin-row" onclick="showCoinDetail(\'' + escHtml(c.id) + '\')"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:11px;color:var(--muted);width:18px;">' + (idx + 1) + '</span><img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" style="width:28px;height:28px;border-radius:50%;"><div><div style="font-weight:800;font-size:13px;text-transform:uppercase;">' + escHtml(c.symbol) + '</div><div style="font-size:11px;color:var(--muted);">' + escHtml(c.name) + '</div></div></div><div style="text-align:right;direction:ltr;"><div style="font-weight:800;font-size:13px;">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</div><div style="font-size:12px;font-weight:bold;color:' + color + ';">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</div></div></div>';
+    var chg = c.price_change_percentage_24h || 0;
+    var color = chg >= 0 ? '#10b981' : '#f43f5e';
+    return '<div class="coin-row" onclick="showCoinDetail(\'' + escHtml(c.id) + '\')">' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<span style="font-size:11px;color:var(--muted);width:18px;">' + (idx + 1) + '</span>' +
+        '<img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" style="width:28px;height:28px;border-radius:50%;">' +
+        '<div><div style="font-weight:800;font-size:13px;text-transform:uppercase;">' + escHtml(c.symbol) + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);">' + escHtml(c.name) + '</div></div>' +
+      '</div>' +
+      '<div style="text-align:right;direction:ltr;">' +
+        '<div style="font-weight:800;font-size:13px;">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</div>' +
+        '<div style="font-size:12px;font-weight:bold;color:' + color + ';">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</div>' +
+      '</div>' +
+    '</div>';
   }).join('');
-  document.getElementById('modal-body').innerHTML = '<h3 style="font-size:16px;font-weight:900;margin-bottom:14px;">' + (isGainer ? '🚀 بیشترین رشد ۲۴ ساعته' : '🩸 بیشترین ریزش ۲۴ ساعته') + '</h3><div style="max-height:60vh;overflow-y:auto;margin-bottom:14px;">' + rowsHtml + '</div><button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن لیست</button>';
+  document.getElementById('modal-body').innerHTML =
+    '<h3 style="font-size:16px;font-weight:900;margin-bottom:14px;">' + (isGainer ? '🚀 بیشترین رشد ۲۴ ساعته' : '🩸 بیشترین ریزش ۲۴ ساعته') + '</h3>' +
+    '<div style="max-height:60vh;overflow-y:auto;margin-bottom:14px;">' + rowsHtml + '</div>' +
+    '<button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن لیست</button>';
   document.getElementById('modal').classList.add('show');
 }
 
@@ -656,15 +867,14 @@ function renderTopCards() {
   var top6 = coins.slice(0, 6);
   document.getElementById('top-coins-cards').innerHTML = top6.map(function(c) {
     var chg = c.price_change_percentage_24h || 0, isPos = chg >= 0, color = isPos ? '#10b981' : '#f43f5e';
-    
-    var path = '';
-    if (c.sparkline && c.sparkline.length > 0) {
-      path = generateSparklinePath(c.sparkline);
-    } else {
-      path = 'M0,17 L100,17';
-    }
-    
-    return '<div class="tc-card" onclick="showCoinDetail(\'' + escHtml(c.id) + '\')"><div class="tc-head"><img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" alt=""><div class="tc-name">' + escHtml(c.name) + '</div></div><svg class="tc-spark" viewBox="0 0 100 35" preserveAspectRatio="none"><path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linecap="round"/></svg><div class="tc-foot"><div class="tc-price">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</div><div class="tc-chg" style="color:' + color + '">' + (isPos?'+':'') + chg.toFixed(2) + '%</div></div></div>';
+    var path = (c.sparkline && c.sparkline.length > 0) ? generateSparklinePath(c.sparkline) : 'M0,17 L100,17';
+    return '<div class="tc-card" onclick="showCoinDetail(\'' + escHtml(c.id) + '\')">' +
+      '<div class="tc-head"><img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" alt="">' +
+      '<div class="tc-name">' + escHtml(c.name) + '</div></div>' +
+      '<svg class="tc-spark" viewBox="0 0 100 35" preserveAspectRatio="none"><path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="2.5" stroke-linecap="round"/></svg>' +
+      '<div class="tc-foot"><div class="tc-price">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</div>' +
+      '<div class="tc-chg" style="color:' + color + '">' + (isPos ? '+' : '') + chg.toFixed(2) + '%</div></div>' +
+    '</div>';
   }).join('');
 }
 
@@ -679,95 +889,133 @@ function renderFullList() {
   var list = coins.filter(function(c) { return c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q); });
   document.getElementById('full-coins-list').innerHTML = list.map(function(c, i) {
     var chg = c.price_change_percentage_24h || 0;
-    return '<div class="coin-row" onclick="showCoinDetail(\'' + escHtml(c.id) + '\')"><div style="display:flex;align-items:center;gap:10px;"><span style="font-size:11px;color:var(--muted);width:20px;">' + (c.market_cap_rank || i+1) + '</span><img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" style="width:28px;height:28px;border-radius:50%;"><div><div style="font-weight:800;font-size:13px;text-transform:uppercase;">' + escHtml(c.symbol) + '</div><div style="font-size:11px;color:var(--muted);">' + escHtml(c.name) + '</div></div></div><div style="text-align:right;direction:ltr;"><div style="font-weight:800;font-size:13px;">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</div><div style="font-size:11px;color:' + (chg>=0?'#10b981':'#f43f5e') + ';">' + (chg>=0?'+':'') + chg.toFixed(2) + '%</div></div></div>';
+    return '<div class="coin-row" onclick="showCoinDetail(\'' + escHtml(c.id) + '\')">' +
+      '<div style="display:flex;align-items:center;gap:10px;">' +
+        '<span style="font-size:11px;color:var(--muted);width:20px;">' + (c.market_cap_rank || i + 1) + '</span>' +
+        '<img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" style="width:28px;height:28px;border-radius:50%;">' +
+        '<div><div style="font-weight:800;font-size:13px;text-transform:uppercase;">' + escHtml(c.symbol) + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);">' + escHtml(c.name) + '</div></div>' +
+      '</div>' +
+      '<div style="text-align:right;direction:ltr;">' +
+        '<div style="font-weight:800;font-size:13px;">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</div>' +
+        '<div style="font-size:11px;color:' + (chg >= 0 ? '#10b981' : '#f43f5e') + ';">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</div>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
 function showCoinDetail(id) {
   var c = coins.find(function(x) { return x.id === id; });
   if (!c) return;
-  document.getElementById('modal-body').innerHTML = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;"><img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" style="width:44px;height:44px;border-radius:50%;"><div><div style="font-size:18px;font-weight:900;">' + escHtml(c.name) + ' (' + escHtml(c.symbol.toUpperCase()) + ')</div><div style="font-size:12px;color:var(--muted);">رتبه بازار: #' + c.market_cap_rank + '</div></div></div><div style="background:#0b0e14;padding:14px;border-radius:16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;"><span style="color:var(--muted);font-size:12px;">قیمت فعلی:</span><span style="font-size:20px;font-weight:900;direction:ltr;">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</span></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;margin-bottom:16px;"><div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">سقف ۲۴ساعته</div><b style="color:#10b981;direction:ltr;display:inline-block;">$' + (c.high_24h||c.current_price).toLocaleString(undefined, {maximumFractionDigits: 4}) + '</b></div><div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">کف ۲۴ساعته</div><b style="color:#f43f5e;direction:ltr;display:inline-block;">$' + (c.low_24h||c.current_price).toLocaleString(undefined, {maximumFractionDigits: 4}) + '</b></div></div><button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن</button>';
+  document.getElementById('modal-body').innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
+      '<img src="' + escHtml(c.image) + '" onerror="this.src=\'' + FALLBACK_COIN_ICON + '\'" style="width:44px;height:44px;border-radius:50%;">' +
+      '<div><div style="font-size:18px;font-weight:900;">' + escHtml(c.name) + ' (' + escHtml(c.symbol.toUpperCase()) + ')</div>' +
+      '<div style="font-size:12px;color:var(--muted);">رتبه بازار: #' + c.market_cap_rank + '</div></div>' +
+    '</div>' +
+    '<div style="background:#0b0e14;padding:14px;border-radius:16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">' +
+      '<span style="color:var(--muted);font-size:12px;">قیمت فعلی:</span>' +
+      '<span style="font-size:20px;font-weight:900;direction:ltr;">$' + c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4}) + '</span>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;margin-bottom:16px;">' +
+      '<div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">سقف ۲۴ساعته</div><b style="color:#10b981;direction:ltr;display:inline-block;">$' + (c.high_24h || c.current_price).toLocaleString(undefined, {maximumFractionDigits: 4}) + '</b></div>' +
+      '<div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">کف ۲۴ساعته</div><b style="color:#f43f5e;direction:ltr;display:inline-block;">$' + (c.low_24h || c.current_price).toLocaleString(undefined, {maximumFractionDigits: 4}) + '</b></div>' +
+    '</div>' +
+    '<button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن</button>';
   document.getElementById('modal').classList.add('show');
 }
-
 function rebuildAllNews() {
-  var combined = [].concat(window.crCloudNews || [], window.crLiveApiNews || [], window.crMarketLiveNews || []);
+  var combined = [].concat(window.crCloudNews || [], window.crLiveApiNews || []);
   if (combined.length > 0) newsList = combined;
   renderNews();
 }
 
 function renderNews() {
-  var html = newsList.slice(0, 3).map(function(n) { return '<div class="news-card" onclick="openNewsModal(\'' + escHtml(n.id) + '\')"><div><div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;"><span class="news-time">' + escHtml(n.source) + '</span><span style="font-size:10px;color:var(--muted);">' + escHtml(n.time || 'جدید') + '</span></div><div style="font-size:13px;font-weight:800;color:#fff;line-height:1.4;">' + escHtml(n.title) + '</div></div></div>'; }).join('');
+  var html = newsList.slice(0, 3).map(function(n) {
+    return '<div class="news-card" onclick="openNewsModal(\'' + escHtml(n.id) + '\')">' +
+      '<div><div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">' +
+        '<span class="news-time">' + escHtml(n.source) + '</span>' +
+        '<span style="font-size:10px;color:var(--muted);">' + escHtml(n.time || 'جدید') + '</span>' +
+      '</div><div style="font-size:13px;font-weight:800;color:#fff;line-height:1.4;">' + escHtml(n.title) + '</div></div>' +
+    '</div>';
+  }).join('');
   var homePrev = document.getElementById('home-news-preview');
   if (homePrev) homePrev.innerHTML = html;
   var fullNews = document.getElementById('news-list-container');
-  if (fullNews) fullNews.innerHTML = newsList.map(function(n) { return '<div class="info-card" onclick="openNewsModal(\'' + escHtml(n.id) + '\')"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span class="news-time">' + escHtml(n.source) + '</span><span style="font-size:11px;color:var(--muted);">' + escHtml(n.time || 'جدید') + '</span></div><div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:6px;">' + escHtml(n.title) + '</div><div style="font-size:12px;color:var(--muted);line-height:1.5;">' + escHtml(n.desc) + '</div></div>'; }).join('');
+  if (fullNews) {
+    fullNews.innerHTML = newsList.map(function(n) {
+      return '<div class="info-card" onclick="openNewsModal(\'' + escHtml(n.id) + '\')">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+          '<span class="news-time">' + escHtml(n.source) + '</span>' +
+          '<span style="font-size:11px;color:var(--muted);">' + escHtml(n.time || 'جدید') + '</span>' +
+        '</div>' +
+        '<div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:6px;">' + escHtml(n.title) + '</div>' +
+        '<div style="font-size:12px;color:var(--muted);line-height:1.5;">' + escHtml(n.desc) + '</div>' +
+      '</div>';
+    }).join('');
+  }
 }
 
 function openNewsModal(id) {
   var n = newsList.find(function(x) { return String(x.id) === String(id); });
   if (!n) return;
-  document.getElementById('modal-body').innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span class="news-time">' + escHtml(n.source) + '</span><span style="font-size:11px;color:var(--muted);">' + escHtml(n.time || 'جدید') + '</span></div><h3 style="font-size:17px;font-weight:900;margin-bottom:12px;color:#fff;">' + escHtml(n.title) + '</h3><p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:16px;">' + escHtml(n.desc) + '</p><button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن خبر</button>';
+  document.getElementById('modal-body').innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+      '<span class="news-time">' + escHtml(n.source) + '</span>' +
+      '<span style="font-size:11px;color:var(--muted);">' + escHtml(n.time || 'جدید') + '</span>' +
+    '</div>' +
+    '<h3 style="font-size:17px;font-weight:900;margin-bottom:12px;color:#fff;">' + escHtml(n.title) + '</h3>' +
+    '<p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:16px;">' + escHtml(n.desc) + '</p>' +
+    '<button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن خبر</button>';
   document.getElementById('modal').classList.add('show');
 }
 
 function generateLiveMarketReports() {
-  if (!coins || coins.length === 0) return;
-  var btc = coins[0], eth = coins[1] || coins[0];
-  var sorted = [].concat(coins).sort(function(a, b) { return (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0); });
-  var topGainer = sorted[0], fngEl = document.querySelector('.gauge-num'), fngVal = fngEl ? fngEl.innerText : '55';
-  var nowTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
   rebuildAllNews();
 }
 
-
+async function translateToFa(text) {
+  try {
+    var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=fa&dt=t&q=' + encodeURIComponent(text);
+    var r = await fetch(url), d = await r.json();
+    if (d && Array.isArray(d[0])) return d[0].map(function(p) { return p[0]; }).join('');
+  } catch (e) {}
+  return text;
+}
 
 let isFetchingNews = false;
 async function fetchAndTranslateLiveNews() {
   if (isFetchingNews) return;
   isFetchingNews = true;
-  generateLiveMarketReports();
   try {
-    // استفاده از API معتبر برای خواندن RSS سایت Cointelegraph
     var res = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https://cointelegraph.com/rss');
     var data = await res.json();
     if (data && data.items && data.items.length > 0) {
-      var topItems = data.items.slice(0, 8);
-      var englishNewsList = topItems.map(function(item) {
-        // پاک کردن تگ‌های HTML از متن خبر
-        var rawBody = item.description ? item.description.replace(/<[^>]+>/g, '').substring(0, 200) + '...' : item.title;
-        return { 
-          id: 'rss_' + (item.guid || item.pubDate), 
-          title: item.title, 
-          source: 'Cointelegraph', 
-          time: 'اخیر', 
-          desc: rawBody 
+      var topItems = data.items.slice(0, 6);
+      var translatedList = await Promise.all(topItems.map(async function(item) {
+        var rawBody = item.description ? item.description.replace(/<[^>]+>/g, '').substring(0, 180) + '...' : item.title;
+        var pair = await Promise.all([translateToFa(item.title), translateToFa(rawBody)]);
+        return {
+          id: 'rss_' + (item.guid || item.pubDate),
+          title: pair[0], source: 'Cointelegraph', time: 'اخیر', desc: pair[1]
         };
-      });
-      window.crLiveApiNews = englishNewsList;
+      }));
+      window.crLiveApiNews = translatedList;
       rebuildAllNews();
-    } else {
-      loadFallbackNews();
-    }
-  } catch (err) {
-    loadFallbackNews();
-  } finally {
-    isFetchingNews = false;
-  }
+    } else { loadFallbackNews(); }
+  } catch (err) { loadFallbackNews(); }
+  finally { isFetchingNews = false; }
 }
 
-// اخبار پشتیبان در صورتی که API جواب نده (تا بخش اخبار هیچوقت خالی نمونه)
 function loadFallbackNews() {
   window.crLiveApiNews = [
-    { id: 'f1', title: 'Bitcoin Surges Past Key Resistance Level', source: 'Crypto News', time: '1 ساعت پیش', desc: 'Bitcoin has broken through a major resistance level, signaling a potential bullish trend for the broader crypto market.' },
-    { id: 'f2', title: 'Ethereum Network Upgrade Approaches', source: 'Crypto News', time: '2 ساعت پیش', desc: 'Developers confirm the next major upgrade for Ethereum is on schedule, promising lower gas fees.' },
-    { id: 'f3', title: 'Solana Ecosystem Sees Massive Growth', source: 'Crypto News', time: '3 ساعت پیش', desc: 'The Solana network continues to attract new projects and users, hitting all-time highs in daily transactions.' }
+    { id: 'f1', title: 'عبور بیت‌کوین از سطح مقاومت کلیدی در بازار جهانی', source: 'Crypto News', time: '۱ ساعت پیش', desc: 'بیت‌کوین با شکستن مقاومت مهم، سیگنال مثبتی برای ادامه روند بازار ارزهای دیجیتال صادر کرد.' },
+    { id: 'f2', title: 'ارتقای جدید شبکه اتریوم برای کاهش کارمزدها', source: 'Crypto News', time: '۲ ساعت پیش', desc: 'توسعه‌دهندگان اتریوم تایید کردند که آپدیت بعدی شبکه طبق برنامه برای بهینه‌سازی کارمزد تراکنش‌ها اجرا می‌شود.' },
+    { id: 'f3', title: 'رشد چشمگیر اکوسیستم سولانا و افزایش تراکنش‌های روزانه', source: 'Crypto News', time: '۳ ساعت پیش', desc: 'شبکه سولانا با جذب پروژه‌های جدید، رکورد تازه‌ای در تعداد تراکنش‌های روزانه ثبت کرد.' }
   ];
   rebuildAllNews();
 }
 
-
-// === crypto4youFA - Core (Part 2B - Final) ===
 var FULL_30DAY_UNLOCKS = [
   { symbol: 'sui', name: 'Sui (SUI)', amountNum: 64190000, amountTxt: '64.19M SUI', day: 1, fallbackPrice: 2.15, pct: '2.26%' },
   { symbol: 'zeta', name: 'ZetaChain (ZETA)', amountNum: 53890000, amountTxt: '53.89M ZETA', day: 1, fallbackPrice: 0.68, pct: '9.35%' },
@@ -819,13 +1067,25 @@ function updateLiveAutoUnlocks() {
 function renderUnlocks30Days() {
   var c = document.getElementById('unlocks-list');
   if (!c) return;
-  c.innerHTML = '<div style="background:#131824;border:1px solid #22293a;padding:10px 12px;border-radius:12px;margin:0 16px 12px;font-size:11px;color:#94a3b8;display:flex;justify-content:space-between;"><span>📅 تقویم زنده ۳۰ روز آینده (' + unlocks.length + ' رویداد)</span><span style="color:#10b981;font-weight:bold;">● آپدیت خودکار روزانه</span></div>' +
+  c.innerHTML =
+    '<div style="background:#131824;border:1px solid #22293a;padding:10px 12px;border-radius:12px;margin:0 16px 12px;font-size:11px;color:#94a3b8;display:flex;justify-content:space-between;">' +
+      '<span>📅 تقویم زنده ۳۰ روز آینده (' + unlocks.length + ' رویداد)</span>' +
+      '<span style="color:#10b981;font-weight:bold;">● آپدیت خودکار روزانه</span>' +
+    '</div>' +
     unlocks.map(function(u) {
       var isUrgent = u.daysLeft <= 3;
-      return '<div class="info-card" style="border-right:3px solid ' + (isUrgent ? '#fb7185' : '#3b82f6') + ';"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><b style="font-size:15px;">🔓 ' + escHtml(u.name) + '</b><span class="badge" style="color:' + (isUrgent ? '#fb7185' : '#60a5fa') + ';">⏳ ' + escHtml(u.time) + '</span></div><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);background:#0b0e14;padding:8px 10px;border-radius:10px;"><span>حجم: <b style="color:#fff;">' + escHtml(u.amt) + '</b></span><span>ارزش: <b style="color:#10b981;direction:ltr;display:inline-block;">' + escHtml(u.val) + '</b></span></div></div>';
+      return '<div class="info-card" style="border-right:3px solid ' + (isUrgent ? '#fb7185' : '#3b82f6') + ';">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+          '<b style="font-size:15px;">🔓 ' + escHtml(u.name) + '</b>' +
+          '<span class="badge" style="color:' + (isUrgent ? '#fb7185' : '#60a5fa') + ';">⏳ ' + escHtml(u.time) + '</span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);background:#0b0e14;padding:8px 10px;border-radius:10px;">' +
+          '<span>حجم: <b style="color:#fff;">' + escHtml(u.amt) + '</b></span>' +
+          '<span>ارزش: <b style="color:#10b981;direction:ltr;display:inline-block;">' + escHtml(u.val) + '</b></span>' +
+        '</div>' +
+      '</div>';
     }).join('');
 }
-
 var vcs = [
   { id: 101, tierNum: 1, name: "a16z Crypto", tier: "Tier 1 🏆", fund: "$7.6B", focus: "زیرساخت لایه ۱، هوش مصنوعی و دیفای", projects: "Solana, Sui, Aptos, EigenLayer, LayerZero", success: "بالاترین نرخ یونیکورن‌سازی در کریپتو", desc: "بزرگ‌ترین و پرنفوذترین صندوق سرمایه‌گذاری خطرپذیر در حوزه وب۳." },
   { id: 102, tierNum: 1, name: "Paradigm", tier: "Tier 1 🏆", fund: "$10.5B", focus: "پروتکل‌های لایه ۱ و صرافی‌های غیرمتمرکز", projects: "Uniswap, Monad, Optimism, Blur, Starknet", success: "بیش از ۸۵٪ پروژه‌ها با ایردراپ‌های سنگین", desc: "صندوق تحقیقاتی-سرمایه‌گذاری تاسیس‌شده توسط هم‌بنیان‌گذار کوین‌بیس." },
@@ -855,7 +1115,15 @@ function setupVcsFilterUI() {
   if (headWrap) {
     var fBox = document.createElement('div');
     fBox.id = 'vcs-filter-box';
-    fBox.innerHTML = '<div class="filter-chips"><button class="f-chip vc-chip active" onclick="setVcTier(0, this)">🌐 همه (Tier 1-5)</button><button class="f-chip vc-chip" onclick="setVcTier(1, this)">🏆 Tier 1</button><button class="f-chip vc-chip" onclick="setVcTier(2, this)">🥈 Tier 2</button><button class="f-chip vc-chip" onclick="setVcTier(3, this)">🥉 Tier 3</button><button class="f-chip vc-chip" onclick="setVcTier(4, this)">⭐ Tier 4</button><button class="f-chip vc-chip" onclick="setVcTier(5, this)">🔹 Tier 5</button></div>';
+    fBox.innerHTML =
+      '<div class="filter-chips">' +
+        '<button class="f-chip vc-chip active" onclick="setVcTier(0, this)">🌐 همه (Tier 1-5)</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(1, this)">🏆 Tier 1</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(2, this)">🥈 Tier 2</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(3, this)">🥉 Tier 3</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(4, this)">⭐ Tier 4</button>' +
+        '<button class="f-chip vc-chip" onclick="setVcTier(5, this)">🔹 Tier 5</button>' +
+      '</div>';
     headWrap.appendChild(fBox);
   }
 }
@@ -880,17 +1148,33 @@ function renderVcsByTier() {
   var tierColors = { 1: '#eab308', 2: '#3b82f6', 3: '#10b981', 4: '#a855f7', 5: '#64748b' };
   vcsContainer.innerHTML = list.map(function(v) {
     var col = tierColors[v.tierNum] || '#3b82f6';
-    return '<div class="info-card" onclick="openVCModal(' + v.id + ')" style="border-right:3px solid ' + col + ';"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:15px;font-weight:900;">🏛️ ' + escHtml(v.name) + '</div><span class="badge" style="color:' + col + ';">' + escHtml(v.tier) + ' | ' + escHtml(v.fund) + '</span></div><div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.6;">' + escHtml(v.desc) + '</div><div style="font-size:11px;color:#60a5fa;background:#0b0e14;padding:8px 10px;border-radius:10px;">🚀 پورتفولیو: <b style="color:#fff;">' + escHtml(v.projects) + '</b></div><div style="font-size:11px;color:#10b981;margin-top:6px;">📈 عملکرد: ' + escHtml(v.success) + '</div></div>';
+    return '<div class="info-card" onclick="openVCModal(' + v.id + ')" style="border-right:3px solid ' + col + ';">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div style="font-size:15px;font-weight:900;">🏛️ ' + escHtml(v.name) + '</div>' +
+        '<span class="badge" style="color:' + col + ';">' + escHtml(v.tier) + ' | ' + escHtml(v.fund) + '</span>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.6;">' + escHtml(v.desc) + '</div>' +
+      '<div style="font-size:11px;color:#60a5fa;background:#0b0e14;padding:8px 10px;border-radius:10px;">🚀 پورتفولیو: <b style="color:#fff;">' + escHtml(v.projects) + '</b></div>' +
+      '<div style="font-size:11px;color:#10b981;margin-top:6px;">📈 عملکرد: ' + escHtml(v.success) + '</div>' +
+    '</div>';
   }).join('');
 }
 
 function openVCModal(id) {
   var v = vcs.find(function(x) { return x.id === id; });
   if (!v) return;
-  document.getElementById('modal-body').innerHTML = '<h3 style="font-size:18px;font-weight:900;margin-bottom:6px;">🏛️ صندوق ' + escHtml(v.name) + '</h3><span class="badge" style="display:inline-block;margin-bottom:12px;">' + escHtml(v.tier) + ' | سرمایه تحت مدیریت: ' + escHtml(v.fund) + '</span><p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;">' + escHtml(v.desc) + '</p><div style="background:#0b0e14;padding:12px;border-radius:14px;margin-bottom:14px;font-size:12px;line-height:1.8;"><div>🎯 <b>حوزه تمرکز:</b> ' + escHtml(v.focus) + '</div><div>🚀 <b>پروژه‌های موفق:</b> <span style="color:#60a5fa">' + escHtml(v.projects) + '</span></div><div>📈 <b>آمار موفقیت:</b> <span style="color:#10b981">' + escHtml(v.success) + '</span></div></div><button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن</button>';
+  document.getElementById('modal-body').innerHTML =
+    '<h3 style="font-size:18px;font-weight:900;margin-bottom:6px;">🏛️ صندوق ' + escHtml(v.name) + '</h3>' +
+    '<span class="badge" style="display:inline-block;margin-bottom:12px;">' + escHtml(v.tier) + ' | سرمایه تحت مدیریت: ' + escHtml(v.fund) + '</span>' +
+    '<p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;">' + escHtml(v.desc) + '</p>' +
+    '<div style="background:#0b0e14;padding:12px;border-radius:14px;margin-bottom:14px;font-size:12px;line-height:1.8;">' +
+      '<div>🎯 <b>حوزه تمرکز:</b> ' + escHtml(v.focus) + '</div>' +
+      '<div>🚀 <b>پروژه‌های موفق:</b> <span style="color:#60a5fa">' + escHtml(v.projects) + '</span></div>' +
+      '<div>📈 <b>آمار موفقیت:</b> <span style="color:#10b981">' + escHtml(v.success) + '</span></div>' +
+    '</div>' +
+    '<button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن</button>';
   document.getElementById('modal').classList.add('show');
 }
-
 var currentDropFilter = 'all';
 
 function setupDropsFilterUI() {
@@ -900,7 +1184,15 @@ function setupDropsFilterUI() {
   if (headWrap) {
     var filterBox = document.createElement('div');
     filterBox.id = 'drops-search-box';
-    filterBox.innerHTML = '<input id="drop-q-inp" class="inp" type="text" placeholder="🔍 جستجوی نام ایردراپ، شبکه یا سرمایه‌گذار..." oninput="renderProDrops()" style="margin-bottom:10px;"><div class="filter-chips"><button class="f-chip drop-chip active" onclick="setDropFilter(\'all\', this)">🌐 همه پروژه‌ها</button><button class="f-chip drop-chip" onclick="setDropFilter(\'free\', this)">🆓 رایگان</button><button class="f-chip drop-chip" onclick="setDropFilter(\'paid\', this)">💰 نیازمند سرمایه</button><button class="f-chip drop-chip" onclick="setDropFilter(\'urgent\', this)">🔥 نزدیک به پایان</button><button class="f-chip drop-chip" onclick="setDropFilter(\'saved\', this)">⭐ ذخیره‌شده‌ها</button></div>';
+    filterBox.innerHTML =
+      '<input id="drop-q-inp" class="inp" type="text" placeholder="🔍 جستجوی نام ایردراپ، شبکه یا سرمایه‌گذار..." oninput="renderProDrops()" style="margin-bottom:10px;">' +
+      '<div class="filter-chips">' +
+        '<button class="f-chip drop-chip active" onclick="setDropFilter(\'all\', this)">🌐 همه پروژه‌ها</button>' +
+        '<button class="f-chip drop-chip" onclick="setDropFilter(\'free\', this)">🆓 رایگان</button>' +
+        '<button class="f-chip drop-chip" onclick="setDropFilter(\'paid\', this)">💰 نیازمند سرمایه</button>' +
+        '<button class="f-chip drop-chip" onclick="setDropFilter(\'urgent\', this)">🔥 نزدیک به پایان</button>' +
+        '<button class="f-chip drop-chip" onclick="setDropFilter(\'saved\', this)">⭐ ذخیره‌شده‌ها</button>' +
+      '</div>';
     headWrap.appendChild(filterBox);
   }
 }
@@ -936,7 +1228,11 @@ function renderProDrops() {
   if (!dropsContainer) return;
   var allD = getAllAdminDropsOnly();
   if (allD.length === 0) {
-    dropsContainer.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px 16px;margin:0 16px;text-align:center;color:var(--muted);font-size:13px;"><div style="font-size:32px;margin-bottom:8px;">🪂</div><div>در حال حاضر هیچ ایردراپی ثبت نشده است.</div></div>';
+    dropsContainer.innerHTML =
+      '<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:26px 16px;margin:0 16px;text-align:center;color:var(--muted);font-size:13px;">' +
+        '<div style="font-size:32px;margin-bottom:8px;">🪂</div>' +
+        '<div>در حال حاضر هیچ ایردراپی ثبت نشده است.</div>' +
+      '</div>';
     return;
   }
   var qEl = document.getElementById('drop-q-inp'), q = qEl ? qEl.value.trim().toLowerCase() : '';
@@ -955,7 +1251,25 @@ function renderProDrops() {
   dropsContainer.innerHTML = filtered.map(function(d, idx) {
     var isFree = d.cost.includes('رایگان'), isSaved = (savedDrops || []).includes(d.name);
     var clicks = parseInt(localStorage.getItem('cr_clk_' + d.name) || '12');
-    return '<div class="info-card" onclick="openProDropDetail(' + idx + ')" style="border-right:3px solid ' + (d.urgent ? '#f43f5e' : (isFree ? '#10b981' : '#eab308')) + ';"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><div style="font-size:16px;font-weight:900;">🪂 ' + escHtml(d.name) + (isSaved ? ' ⭐' : '') + '</div><div style="display:flex;gap:5px;"><span class="badge" style="background:' + (isFree ? 'rgba(16,185,129,0.15);color:#10b981' : 'rgba(234,179,8,0.15);color:#eab308') + ';">' + escHtml(d.cost) + '</span><span class="badge" style="color:' + (d.urgent ? '#fb7185' : '#60a5fa') + ';">⏳ ' + escHtml(d.deadline) + '</span></div></div><div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;">' + escHtml(d.task) + '</div><div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;background:#0b0e14;padding:8px 10px;border-radius:10px;margin-bottom:8px;"><span>⛓️ شبکه: <b style="color:#fff;">' + escHtml(d.chain) + '</b></span><span>| 💰 سرمایه: <b style="color:#10b981;">' + escHtml(d.raised) + '</b></span><span>| 🏛️ حامی: <b style="color:#60a5fa;">' + escHtml(d.vc) + '</b></span></div><div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8;"><span>🕒 بروزرسانی: ' + escHtml(d.updatedAt) + ' | 👁️ ' + clicks + ' بازدید</span><span style="color:#3b82f6;font-weight:bold;">📖 جزئیات و لینک ورود 〈</span></div></div>';
+    return '<div class="info-card" onclick="openProDropDetail(' + idx + ')" style="border-right:3px solid ' + (d.urgent ? '#f43f5e' : (isFree ? '#10b981' : '#eab308')) + ';">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div style="font-size:16px;font-weight:900;">🪂 ' + escHtml(d.name) + (isSaved ? ' ⭐' : '') + '</div>' +
+        '<div style="display:flex;gap:5px;">' +
+          '<span class="badge" style="background:' + (isFree ? 'rgba(16,185,129,0.15);color:#10b981' : 'rgba(234,179,8,0.15);color:#eab308') + ';">' + escHtml(d.cost) + '</span>' +
+          '<span class="badge" style="color:' + (d.urgent ? '#fb7185' : '#60a5fa') + ';">⏳ ' + escHtml(d.deadline) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;">' + escHtml(d.task) + '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;background:#0b0e14;padding:8px 10px;border-radius:10px;margin-bottom:8px;">' +
+        '<span>⛓️ شبکه: <b style="color:#fff;">' + escHtml(d.chain) + '</b></span>' +
+        '<span>| 💰 سرمایه: <b style="color:#10b981;">' + escHtml(d.raised) + '</b></span>' +
+        '<span>| 🏛️ حامی: <b style="color:#60a5fa;">' + escHtml(d.vc) + '</b></span>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#94a3b8;">' +
+        '<span>🕒 بروزرسانی: ' + escHtml(d.updatedAt) + ' | 👁️ ' + clicks + ' بازدید</span>' +
+        '<span style="color:#3b82f6;font-weight:bold;">📖 جزئیات و لینک ورود 〈</span>' +
+      '</div>' +
+    '</div>';
   }).join('');
   window.crCurrentFilteredDrops = filtered;
 }
@@ -965,8 +1279,26 @@ function openProDropDetail(idx) {
   if (!d) return;
   localStorage.setItem('cr_clk_' + d.name, parseInt(localStorage.getItem('cr_clk_' + d.name) || '12') + 1);
   var isSaved = (savedDrops || []).includes(d.name);
-  var stepsHtml = (d.steps || []).map(function(s) { return '<div style="background:#131824;padding:9px 12px;border-radius:10px;margin-bottom:6px;font-size:12px;line-height:1.7;border-right:2px solid #3b82f6;">' + escHtml(s) + '</div>'; }).join('');
-  document.getElementById('modal-body').innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><h3 style="font-size:18px;font-weight:900;margin:0;">🪂 ' + escHtml(d.name) + '</h3><span class="badge">' + escHtml(d.cost) + '</span></div><div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">🕒 بروزرسانی: ' + escHtml(d.updatedAt) + ' | ⏳ وضعیت: <b style="color:#fb7185;">' + escHtml(d.deadline) + '</b></div><p style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">' + escHtml(d.task) + '</p><div style="background:#0b0e14;padding:12px;border-radius:14px;margin-bottom:14px;font-size:12px;line-height:1.9;"><div>⛓️ <b>شبکه:</b> ' + escHtml(d.chain) + '</div><div>🏛️ <b>سرمایه‌گذاران:</b> <span style="color:#60a5fa">' + escHtml(d.vc) + '</span></div><div>💰 <b>سرمایه جذب‌شده:</b> <span style="color:#10b981">' + escHtml(d.raised) + '</span></div><div>🎁 <b>پاداش کمپین:</b> <span style="color:#eab308">' + escHtml(d.reward) + '</span></div></div><div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:900;color:#fff;margin-bottom:8px;">🎓 مراحل شرکت در ایردراپ:</div>' + stepsHtml + '</div><a href="' + escHtml(d.link) + '" target="_blank" rel="noopener noreferrer" class="spin-btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px;">🚀 ورود مستقیم به ایردراپ و شروع تسک‌ها</a><button onclick="toggleSaveDropByIdx(' + idx + ')" style="width:100%;background:' + (isSaved ? '#ef4444' : '#10b981') + ';color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-bottom:8px;cursor:pointer;">' + (isSaved ? '⭐ حذف از ایردراپ‌های من' : '⭐ ذخیره در پروفایل من') + '</button><button onclick="closeModal()" style="width:100%;background:#222838;color:#fff;border:none;padding:10px;border-radius:12px;cursor:pointer;">بستن</button>';
+  var stepsHtml = (d.steps || []).map(function(s) {
+    return '<div style="background:#131824;padding:9px 12px;border-radius:10px;margin-bottom:6px;font-size:12px;line-height:1.7;border-right:2px solid #3b82f6;">' + escHtml(s) + '</div>';
+  }).join('');
+  document.getElementById('modal-body').innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+      '<h3 style="font-size:18px;font-weight:900;margin:0;">🪂 ' + escHtml(d.name) + '</h3>' +
+      '<span class="badge">' + escHtml(d.cost) + '</span>' +
+    '</div>' +
+    '<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">🕒 بروزرسانی: ' + escHtml(d.updatedAt) + ' | ⏳ وضعیت: <b style="color:#fb7185;">' + escHtml(d.deadline) + '</b></div>' +
+    '<p style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">' + escHtml(d.task) + '</p>' +
+    '<div style="background:#0b0e14;padding:12px;border-radius:14px;margin-bottom:14px;font-size:12px;line-height:1.9;">' +
+      '<div>⛓️ <b>شبکه:</b> ' + escHtml(d.chain) + '</div>' +
+      '<div>🏛️ <b>سرمایه‌گذاران:</b> <span style="color:#60a5fa">' + escHtml(d.vc) + '</span></div>' +
+      '<div>💰 <b>سرمایه جذب‌شده:</b> <span style="color:#10b981">' + escHtml(d.raised) + '</span></div>' +
+      '<div>🎁 <b>پاداش کمپین:</b> <span style="color:#eab308">' + escHtml(d.reward) + '</span></div>' +
+    '</div>' +
+    '<div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:900;color:#fff;margin-bottom:8px;">🎓 مراحل شرکت در ایردراپ:</div>' + stepsHtml + '</div>' +
+    '<a href="' + escHtml(d.link) + '" target="_blank" rel="noopener noreferrer" class="spin-btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:8px;">🚀 ورود مستقیم به ایردراپ و شروع تسک‌ها</a>' +
+    '<button onclick="toggleSaveDropByIdx(' + idx + ')" style="width:100%;background:' + (isSaved ? '#ef4444' : '#10b981') + ';color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-bottom:8px;cursor:pointer;">' + (isSaved ? '⭐ حذف از ایردراپ‌های من' : '⭐ ذخیره در پروفایل من') + '</button>' +
+    '<button onclick="closeModal()" style="width:100%;background:#222838;color:#fff;border:none;padding:10px;border-radius:12px;cursor:pointer;">بستن</button>';
   document.getElementById('modal').classList.add('show');
 }
 
@@ -992,7 +1324,9 @@ function onManualUsdtInput() {
 function populateConverter() {
   var sel = document.getElementById('c-sel');
   if (!sel || !coins.length) return;
-  sel.innerHTML = coins.slice(0, 30).map(function(c) { return '<option value="' + escHtml(c.id) + '">' + escHtml(c.name) + ' (' + escHtml(c.symbol.toUpperCase()) + ')</option>'; }).join('');
+  sel.innerHTML = coins.slice(0, 30).map(function(c) {
+    return '<option value="' + escHtml(c.id) + '">' + escHtml(c.name) + ' (' + escHtml(c.symbol.toUpperCase()) + ')</option>';
+  }).join('');
   calcConv();
 }
 
