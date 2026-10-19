@@ -651,14 +651,7 @@ function generateLiveMarketReports() {
   rebuildAllNews();
 }
 
-async function translateToFa(text) {
-  try {
-    var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=fa&dt=t&q=' + encodeURIComponent(text);
-    var r = await fetch(url), d = await r.json();
-    if (d && Array.isArray(d[0])) return d[0].map(function(part) { return part[0]; }).join('');
-  } catch (err) {}
-  return text;
-}
+
 
 let isFetchingNews = false;
 async function fetchAndTranslateLiveNews() {
@@ -668,17 +661,27 @@ async function fetchAndTranslateLiveNews() {
   try {
     var res = await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN'), data = await res.json();
     if (data && Array.isArray(data.Data) && data.Data.length > 0) {
-      var topItems = data.Data.slice(0, 6);
-      var translatedList = await Promise.all(topItems.map(async function(item) {
-        var rawBody = item.body ? item.body.substring(0, 180) + '...' : item.title;
-        var pair = await Promise.all([translateToFa(item.title), translateToFa(rawBody)]);
+      var topItems = data.Data.slice(0, 8);
+      var englishNewsList = topItems.map(function(item) {
+        var rawBody = item.body ? item.body.substring(0, 200) + '...' : item.title;
         var minsAgo = Math.max(1, Math.floor((Date.now() / 1000 - (item.published_on || (Date.now() / 1000))) / 60));
         var timeStr = minsAgo < 60 ? (minsAgo + ' دقیقه پیش') : (Math.floor(minsAgo / 60) + ' ساعت پیش');
-        return { id: 'live_fa_' + item.id, title: pair[0], source: (item.source_info && item.source_info.name) ? item.source_info.name : 'CryptoGlobal', time: timeStr, desc: pair[1] };
-      }));
-      if (translatedList.length > 0) { window.crLiveApiNews = translatedList; rebuildAllNews(); }
+        return { 
+          id: 'live_en_' + item.id, 
+          title: item.title, 
+          source: (item.source_info && item.source_info.name) ? item.source_info.name : 'CryptoGlobal', 
+          time: timeStr, 
+          desc: rawBody 
+        };
+      });
+      if (englishNewsList.length > 0) { 
+        window.crLiveApiNews = englishNewsList; 
+        rebuildAllNews(); 
+      }
     }
-  } catch (err) { rebuildAllNews(); }
+  } catch (err) { 
+    rebuildAllNews(); 
+  }
   finally { isFetchingNews = false; }
 }
 
