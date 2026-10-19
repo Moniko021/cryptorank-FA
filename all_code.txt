@@ -1,0 +1,1090 @@
+=== START OF index.html ===
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>کریپتورنک پرو</title>
+  <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+  <link rel="stylesheet" href="style.css?v=110">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+
+  <!-- پنجره ورود اولیه -->
+  <div id="auth-modal" class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-logo">crypto<span>rank</span></div>
+      <div class="auth-sub">به پلتفرم تحلیل کریپتو و شکار ایردراپ خوش آمدید. لطفاً نحوه ورود خود را انتخاب کنید:</div>
+      
+      <div id="auth-main-btns">
+        <button id="saved-google-btn" class="btn-google" style="display:none; background:#eff6ff; border:2px solid #3b82f6;" onclick="quickGoogleLogin()">
+          <span>🔄</span> <span id="saved-google-txt">ادامه با اکانت ذخیره شده</span>
+        </button>
+
+        <button class="btn-google" onclick="realGoogleSignIn()">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+          <span>ورود با حساب گوگل</span>
+        </button>
+
+        <button class="btn-anon" onclick="loginAnonymously()">
+          <span>🕶️</span>
+          <span>ورود به صورت ناشناس (مهمان)</span>
+        </button>
+      </div>
+
+      <div id="google-form" class="google-form-box">
+        <div style="font-size:13px; font-weight:800; margin-bottom:10px; color:#60a5fa;">اتصال حساب گوگل (ذخیره برای ورودهای بعدی)</div>
+        <input id="g-name" class="inp" type="text" placeholder="نام و نام خانوادگی شما (مثلاً کوروش)">
+        <input id="g-email" class="inp" type="email" placeholder="آدرس جیمیل (example@gmail.com)" style="direction:ltr; text-align:left;">
+        <button onclick="submitGoogleLogin()" class="spin-btn" style="width:100%; margin-bottom:8px;">✅ ثبت و ورود دائمی</button>
+        <button onclick="hideGoogleForm()" style="width:100%; background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; padding:6px;">بازگشت</button>
+      </div>
+    </div>
+  </div>
+
+  <header>
+    <div class="top-nav">
+      <div class="logo">crypto<span>rank</span></div>
+      <div class="top-icons">
+        <div class="user-chip" onclick="openProfileModal()" id="header-user-chip">
+          <div class="user-avatar" id="header-user-avatar">🕶️</div>
+          <span class="user-name-txt" id="header-user-name">ناشناس</span>
+        </div>
+        <button class="icon-btn" onclick="manualRefresh()" title="به‌روزرسانی قیمت‌ها">🔄</button>
+        <!-- دکمه ورود به پنل مدیریت اختصاصی -->
+        <a href="admin.html" class="icon-btn" title="پنل مدیریت" style="text-decoration:none;">⚙️</a>
+      </div>
+    </div>
+
+    <!-- منوی استوری بالای صفحه -->
+    <div class="stories-bar">
+      <button onclick="openPage('home')" id="st-home" class="story-item active">
+        <div class="story-ring"><div class="story-inner">🏠</div></div>
+        <span class="story-title">صفحه اصلی</span>
+      </button>
+      <button onclick="openPage('news')" id="st-news" class="story-item">
+        <div class="story-ring"><div class="story-inner">📰</div></div>
+        <span class="story-title">اخبار آنی</span>
+      </button>
+      <button onclick="openPage('drops')" id="st-drops" class="story-item">
+        <div class="story-ring"><div class="story-inner">🪂</div></div>
+        <span class="story-title">شکار ایردراپ</span>
+      </button>
+      <button onclick="openPage('funding')" id="st-funding" class="story-item">
+        <div class="story-ring"><div class="story-inner">🚀</div></div>
+        <span class="story-title">جذب سرمایه</span>
+      </button>
+      <button onclick="openPage('vcs')" id="st-vcs" class="story-item">
+        <div class="story-ring"><div class="story-inner">🏛️</div></div>
+        <span class="story-title">سرمایه‌گذاران</span>
+      </button>
+      <button onclick="openPage('unlocks')" id="st-unlocks" class="story-item">
+        <div class="story-ring"><div class="story-inner">🔓</div></div>
+        <span class="story-title">آنلاک توکن</span>
+      </button>
+      <button onclick="openPage('converter')" id="st-converter" class="story-item">
+        <div class="story-ring"><div class="story-inner">💱</div></div>
+        <span class="story-title">مبدل ارز</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- PAGE 1: HOME -->
+  <div id="page-home" class="view-page active">
+    
+    <div class="sec-wrap">
+      <div class="sec-head"><div class="sec-title">بخش‌های ویژه</div></div>
+      <div class="featured-scroll">
+        <div class="feat-card feat-green" onclick="openGainersLosersModal('gainers')">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="feat-icon">🚀</div>
+            <span style="font-size:10px; background:rgba(0,0,0,0.25); padding:3px 7px; border-radius:6px; font-weight:bold;">آنلاین</span>
+          </div>
+          <div>
+            <div class="feat-h">بیشترین رشد</div>
+            <div class="feat-p">ارزهایی که امروز بیشترین پامپ را داشتند</div>
+            <div class="live-badge" id="top-gainer-preview">در حال دریافت...</div>
+          </div>
+        </div>
+
+        <div class="feat-card feat-red" onclick="openGainersLosersModal('losers')">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="feat-icon">🩸</div>
+            <span style="font-size:10px; background:rgba(0,0,0,0.25); padding:3px 7px; border-radius:6px; font-weight:bold;">آنلاین</span>
+          </div>
+          <div>
+            <div class="feat-h">بیشترین ریزش</div>
+            <div class="feat-p">ارزهایی که امروز بیشترین اصلاح را داشتند</div>
+            <div class="live-badge" id="top-loser-preview">در حال دریافت...</div>
+          </div>
+        </div>
+
+        <div class="feat-card feat-blue" onclick="openPage('funding')">
+          <div class="feat-icon">💼</div>
+          <div>
+            <div class="feat-h">جذب سرمایه‌ها</div>
+            <div class="feat-p">جدیدترین سرمایه‌گذاری‌های VC در کریپتو</div>
+          </div>
+        </div>
+
+        <div class="feat-card feat-dark" onclick="openPage('drops')">
+          <div class="feat-icon">🪂</div>
+          <div>
+            <div class="feat-h">شکار ایردراپ</div>
+            <div class="feat-p">ایردراپ‌های معتبر و تسک‌های رایگان</div>
+          </div>
+        </div>
+
+        <div class="feat-card feat-purple" onclick="openPage('vcs')">
+          <div class="feat-icon">🏛️</div>
+          <div>
+            <div class="feat-h">صندوق‌های VC</div>
+            <div class="feat-p">بررسی غول‌های سرمایه‌گذاری و پورتفولیو</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-wrap">
+      <div class="sec-head">
+        <div class="sec-title">اخبار فوری کریپتو</div>
+        <button class="view-all-btn" onclick="openPage('news')">مشاهده همه 〈</button>
+      </div>
+      <div id="home-news-preview"></div>
+    </div>
+
+    <div class="sec-wrap">
+      <div class="sec-head"><div class="sec-title">شاخص‌های لحظه‌ای بازار</div></div>
+      <div class="widgets-row">
+        <div class="w-card">
+          <div class="w-top"><span>شاخص ترس و طمع</span></div>
+          <div class="gauge-box">
+            <div class="gauge-arc"></div>
+            <div class="gauge-num">62</div>
+            <div class="gauge-lbl">طمع (صعودی)</div>
+          </div>
+        </div>
+        <div class="w-card">
+          <div class="w-top"><span>دامیننس بیت‌کوین</span><span style="color:#3b82f6">۷ روزه</span></div>
+          <div>
+            <div class="dom-val" id="btc-dom">57.89%</div>
+            <div class="dom-chg">+1.17% ↗</div>
+          </div>
+          <svg class="mini-chart" viewBox="0 0 100 35">
+            <path d="M0,30 L15,25 L30,28 L45,18 L60,22 L75,10 L90,14 L100,5" fill="none" stroke="#10b981" stroke-width="2.5"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-wrap">
+      <div class="sec-head">
+        <div class="sec-title">برترین ارزهای بازار</div>
+        <button class="view-all-btn" onclick="toggleAllCoins()" id="view-all-txt">مشاهده همه (50) 〈</button>
+      </div>
+      
+      <div class="top-coins-scroll" id="top-coins-cards">
+        <div style="color:var(--muted); font-size:12px; padding:20px;">در حال دریافت قیمت‌های زنده...</div>
+      </div>
+
+      <div id="all-coins-wrapper" class="all-coins-box" style="display:none;">
+        <input id="coin-search" class="inp" type="text" placeholder="🔍 جستجوی نام یا نماد ارز (BTC, ETH, SOL)..." oninput="renderFullList()">
+        <div id="full-coins-list"></div>
+      </div>
+    </div>
+
+    <div class="wheel-section">
+      <div style="font-size:17px; font-weight:900; color:#fff;">🎡 گردونه جایزه روزانه</div>
+      <div style="font-size:12px; color:var(--muted); margin-top:4px;">هر ۲۴ ساعت گردونه را بچرخانید و امتیاز و جایزه ویژه ببرید!</div>
+      <div style="font-size:18px; margin-bottom:-12px; position:relative; z-index:2;">🔻</div>
+      <div class="wheel-circle" id="wheel-el">
+        <div class="wheel-center">🎁</div>
+      </div>
+      <button class="spin-btn" onclick="spinWheel()">🎯 چرخاندن گردونه شانس</button>
+    </div>
+  </div>
+
+  <div id="page-news" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">📰 آخرین اخبار و تحلیل‌های آنی کریپتو</div></div><div id="news-list-container"></div></div>
+  <div id="page-drops" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🪂 شکار ایردراپ‌ها (آنلاین)</div></div><div id="drops-list"></div></div>
+  <div id="page-vcs" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🏛️ سرمایه‌گذاران برتر کریپتو</div></div><div id="vcs-list"></div></div>
+  <div id="page-funding" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🚀 جذب سرمایه‌های اخیر</div></div><div id="funding-list"></div></div>
+  <div id="page-unlocks" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">🔓 تقویم آزادسازی توکن‌ها</div></div><div id="unlocks-list"></div></div>
+  <div id="page-converter" class="view-page"><div class="sec-wrap"><div class="sec-title" style="margin-bottom:12px;">💱 مبدل لحظه‌ای ارزها</div></div><div class="info-card"><label style="font-size:12px; color:var(--muted);">مقدار ارز:</label><input type="number" id="c-amt" class="inp" value="1" oninput="calcConv()" style="margin-top:6px;"><label style="font-size:12px; color:var(--muted);">انتخاب ارز:</label><select id="c-sel" class="inp" onchange="calcConv()" style="margin-top:6px;"></select><div style="background:#0b0e14; padding:16px; border-radius:14px; text-align:center; margin-top:8px;"><div style="font-size:11px; color:var(--muted);">معادل دلاری:</div><div id="c-res" style="font-size:24px; font-weight:900; color:#10b981; direction:ltr; margin-top:4px;">$0.00</div></div></div></div>
+
+  <div id="modal" class="modal" onclick="closeModal()"><div class="modal-box" onclick="event.stopPropagation()"><div id="modal-body"></div></div></div>
+
+  <script src="app.js?v=110"></script>
+</body>
+</html>
+
+
+=== START OF app.js ===
+let coins = [];
+let showFullCoins = false;
+let currentPage = 'home';
+let wheelDeg = 0;
+let cloudDrops = [];
+
+let currentUser = JSON.parse(localStorage.getItem('cr_active_user')) || null;
+let savedGoogleAccount = JSON.parse(localStorage.getItem('cr_saved_google_user')) || null;
+let savedDrops = JSON.parse(localStorage.getItem('cr_user_saved_drops')) || [];
+
+function syncUserToCloud() {
+  if (typeof db !== 'undefined' && currentUser && currentUser.email && currentUser.type === 'google') {
+    const docKey = currentUser.email.replace(/[^a-zA-Z0-9]/g, '_');
+    db.collection("users").doc(docKey).set({
+      name: currentUser.name,
+      email: currentUser.email,
+      points: currentUser.points || 100,
+      savedDrops: savedDrops,
+      updatedAt: new Date().toISOString()
+    }, { merge: true }).catch(() => {});
+  }
+}
+
+function loadUserFromCloud(email) {
+  if (typeof db === 'undefined' || !email) return;
+  const docKey = email.replace(/[^a-zA-Z0-9]/g, '_');
+  db.collection("users").doc(docKey).get().then((doc) => {
+    if (doc.exists) {
+      const data = doc.data();
+      if (data.points !== undefined && currentUser) {
+        currentUser.points = Math.max(currentUser.points || 0, data.points);
+        localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+      }
+      if (Array.isArray(data.savedDrops) && data.savedDrops.length > 0) {
+        savedDrops = Array.from(new Set([...savedDrops, ...data.savedDrops]));
+        localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
+      }
+    }
+  }).catch(() => {});
+}
+
+function initAuth() {
+  if (typeof auth !== 'undefined') {
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        const userObj = {
+          type: 'google',
+          uid: user.uid,
+          name: user.displayName || user.email.split('@')[0],
+          email: user.email,
+          photo: user.photoURL || '',
+          points: savedGoogleAccount?.points || 100
+        };
+        currentUser = userObj;
+        savedGoogleAccount = userObj;
+        localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+        localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
+        const authModal = document.getElementById('auth-modal');
+        if (authModal) authModal.classList.remove('show');
+        updateUserHeader();
+        loadUserFromCloud(user.email);
+      }
+    });
+  }
+
+  if (currentUser && currentUser.type === 'google') {
+    updateUserHeader();
+    loadUserFromCloud(currentUser.email);
+    return;
+  }
+  const authModal = document.getElementById('auth-modal');
+  if (authModal) authModal.classList.add('show');
+
+  if (savedGoogleAccount) {
+    const savedBtn = document.getElementById('saved-google-btn');
+    const savedTxt = document.getElementById('saved-google-txt');
+    if (savedBtn && savedTxt) {
+      savedBtn.style.display = 'flex';
+      savedTxt.innerText = `ادامه با ${savedGoogleAccount.name} (${savedGoogleAccount.email})`;
+    }
+  }
+}
+
+async function realGoogleSignIn() {
+  try {
+    if (typeof firebase === 'undefined' || !firebase.auth) {
+      showGoogleForm();
+      return;
+    }
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await auth.signInWithPopup(provider);
+    const user = result.user;
+    if (user) {
+      const userObj = {
+        type: 'google',
+        uid: user.uid,
+        name: user.displayName || user.email.split('@')[0],
+        email: user.email,
+        photo: user.photoURL || '',
+        points: savedGoogleAccount?.points || 100
+      };
+      currentUser = userObj;
+      savedGoogleAccount = userObj;
+      localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+      localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
+      document.getElementById('auth-modal').classList.remove('show');
+      updateUserHeader();
+      syncUserToCloud();
+    }
+  } catch (err) {
+    showGoogleForm();
+  }
+}
+
+function showGoogleForm() {
+  document.getElementById('auth-main-btns').style.display = 'none';
+  document.getElementById('google-form').style.display = 'block';
+  if (savedGoogleAccount) {
+    document.getElementById('g-name').value = savedGoogleAccount.name || '';
+    document.getElementById('g-email').value = savedGoogleAccount.email || '';
+  }
+}
+
+function hideGoogleForm() {
+  document.getElementById('google-form').style.display = 'none';
+  document.getElementById('auth-main-btns').style.display = 'block';
+}
+
+function submitGoogleLogin() {
+  const name = document.getElementById('g-name').value.trim();
+  const email = document.getElementById('g-email').value.trim();
+  if (!name || !email || !email.includes('@')) {
+    alert('لطفاً نام و آدرس جیمیل معتبر وارد کنید.');
+    return;
+  }
+  const userObj = {
+    type: 'google',
+    name: name,
+    email: email,
+    points: savedGoogleAccount?.points || 100,
+    loginDate: new Date().toLocaleDateString('fa-IR')
+  };
+  currentUser = userObj;
+  savedGoogleAccount = userObj;
+  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+  localStorage.setItem('cr_saved_google_user', JSON.stringify(savedGoogleAccount));
+  document.getElementById('auth-modal').classList.remove('show');
+  updateUserHeader();
+  loadUserFromCloud(email);
+  syncUserToCloud();
+}
+
+function quickGoogleLogin() {
+  if (!savedGoogleAccount) return;
+  currentUser = savedGoogleAccount;
+  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+  document.getElementById('auth-modal').classList.remove('show');
+  updateUserHeader();
+  loadUserFromCloud(currentUser.email);
+}
+
+function loginAnonymously() {
+  currentUser = {
+    type: 'anon',
+    name: 'کاربر ناشناس',
+    email: 'بدون ایمیل (حالت مهمان)',
+    points: 0
+  };
+  localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+  document.getElementById('auth-modal').classList.remove('show');
+  updateUserHeader();
+}
+
+function updateUserHeader() {
+  const avatarEl = document.getElementById('header-user-avatar');
+  const nameEl = document.getElementById('header-user-name');
+  if (!currentUser || !avatarEl || !nameEl) return;
+
+  if (currentUser.type === 'google') {
+    if (currentUser.photo) {
+      avatarEl.innerHTML = `<img src="${currentUser.photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+    } else {
+      avatarEl.innerText = currentUser.name.charAt(0).toUpperCase();
+    }
+    avatarEl.style.background = '#10b981';
+    nameEl.innerText = currentUser.name;
+  } else {
+    avatarEl.innerText = '🕶️';
+    avatarEl.style.background = '#3b82f6';
+    nameEl.innerText = 'ناشناس';
+  }
+}
+
+function openProfileModal() {
+  if (!currentUser) {
+    document.getElementById('auth-modal').classList.add('show');
+    return;
+  }
+  const isG = currentUser.type === 'google';
+  const savedCount = savedDrops.length;
+  document.getElementById('modal-body').innerHTML = `
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="width:60px;height:60px;border-radius:50%;background:${isG?'#10b981':'#3b82f6'};color:#fff;font-size:26px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;overflow:hidden;">
+        ${isG && currentUser.photo ? `<img src="${currentUser.photo}" style="width:100%;height:100%;object-fit:cover;">` : (isG ? currentUser.name.charAt(0).toUpperCase() : '🕶️')}
+      </div>
+      <div style="font-size:18px;font-weight:900;">${currentUser.name}</div>
+      <div style="font-size:12px;color:var(--muted);direction:ltr;">${currentUser.email}</div>
+    </div>
+    <div style="background:#0b0e14;padding:14px;border-radius:16px;margin-bottom:16px;font-size:12px;line-height:2;">
+      <div>🔐 <b>نوع حساب:</b> <span style="color:${isG?'#10b981':'#eab308'}">${isG ? 'حساب گوگل (متصل به ابر)' : 'ورود ناشناس'}</span></div>
+      <div>🎁 <b>امتیاز پلتفرم:</b> <b style="color:#60a5fa">${currentUser.points || 0} امتیاز</b></div>
+      <div>⭐ <b>ایردراپ‌های ذخیره‌شده:</b> <b style="color:#eab308">${savedCount} مورد</b></div>
+    </div>
+    ${savedCount > 0 ? `<div style="margin-bottom:14px;"><div style="font-size:13px;font-weight:800;margin-bottom:6px;">لیست ایردراپ‌های شما:</div>${savedDrops.map(d=>`<div style="font-size:11px;background:#0b0e14;padding:6px 10px;border-radius:8px;margin-bottom:4px;color:#10b981;">✓ ${d}</div>`).join('')}</div>` : ''}
+    <button onclick="switchAccount()" style="width:100%;background:#3b82f6;color:#fff;border:none;padding:12px;border-radius:12px;font-weight:bold;margin-bottom:8px;cursor:pointer;">🔄 تغییر حساب / ورود با گوگل</button>
+    <button onclick="closeModal()" style="width:100%;background:#222838;color:#fff;border:none;padding:11px;border-radius:12px;cursor:pointer;">بستن</button>
+  `;
+  document.getElementById('modal').classList.add('show');
+}
+
+function switchAccount() {
+  closeModal();
+  if (typeof auth !== 'undefined' && auth.currentUser) {
+    auth.signOut();
+  }
+  localStorage.removeItem('cr_active_user');
+  currentUser = null;
+  hideGoogleForm();
+  initAuth();
+}
+
+let vcs = [
+  { id: 1, name: "Paradigm", tier: "سطح ۱ 🏆", fund: "$10.5 Billion", focus: "زیرساخت لایه ۱، دیفای و وب۳", projects: "Uniswap, Optimism, Monad, Blur, Starknet", success: "بیش از ۸۵٪ پروژه‌ها با رشد بالای ۱۰ برابر", desc: "بزرگ‌ترین و معتبرترین صندوق سرمایه‌گذاری خطرپذیر کریپتو." },
+  { id: 2, name: "a16z Crypto", tier: "سطح ۱ 🏆", fund: "$7.6 Billion", focus: "بلاکچین‌های لایه ۱، هوش مصنوعی و گیمینگ", projects: "Solana, Sui, Aptos, LayerZero, EigenLayer", success: "حامی اصلی سولانا و بزرگ‌ترین یونیکورن‌های کریپتو", desc: "بازوی تخصصی رمزارز شرکت Andreessen Horowitz." },
+  { id: 3, name: "Binance Labs", tier: "سطح ۱ 🏆", fund: "$10.0 Billion", focus: "اکوسیستم دیفای، زیرساخت و تلگرام اپ‌ها", projects: "Polygon, Sui, Pendle, Celestia, Blum", success: "بیشترین نرخ لیست شدن مستقیم در صرافی بایننس", desc: "بازوی سرمایه‌گذاری رسمی بزرگ‌ترین صرافی جهان." }
+];
+
+let funding = [
+  { id: 1, name: "Story Protocol", raised: "$80,000,000", round: "Series B", lead: "a16z Crypto", cat: "بلاکچین و هوش مصنوعی" },
+  { id: 2, name: "Celestia", raised: "$100,000,000", round: "Strategic", lead: "Bain Capital", cat: "شبکه ماژولار" },
+  { id: 3, name: "Monad", raised: "$225,000,000", round: "Series A", lead: "Paradigm", cat: "لایه اول فوق سریع EVM" }
+];
+
+let defaultUnlocks = [
+  { id: 1, name: "Arbitrum (ARB)", amt: "92.65M ARB", val: "$50.2M", time: "۴ روز دیگر" },
+  { id: 2, name: "Optimism (OP)", amt: "31.34M OP", val: "$48.5M", time: "۹ روز دیگر" }
+];
+let unlocks = [...defaultUnlocks];
+
+let defaultNews = [
+  { id: 1, title: "افزایش ورود سرمایه نهادی به صندوق‌های ETF بیت‌کوین و اتریوم", time: "زنده", source: "CoinDesk", desc: "گزارش‌های هفتگی نشان‌دهنده ثبت رکورد جدید در جذب سرمایه توسط صندوق‌های قابل معامله در بورس است." },
+  { id: 2, title: "رشد چشمگیر حجم معاملات صرافی‌های غیرمتمرکز (DEX) در لایه‌های دوم", time: "زنده", source: "CoinTelegraph", desc: "با کاهش کارمزد تراکنش‌ها، فعالیت کاربران در شبکه‌های لایه دوم اتریوم و سولانا به اوج رسیده است." }
+];
+let newsList = [...defaultNews];
+
+function openPage(p) {
+  currentPage = p;
+  ['home','news','drops','vcs','funding','unlocks','converter'].forEach(x => {
+    const pg = document.getElementById('page-' + x);
+    const st = document.getElementById('st-' + x);
+    if (pg) pg.classList.remove('active');
+    if (st) st.classList.remove('active');
+  });
+  document.getElementById('page-' + p).classList.add('active');
+  const activeSt = document.getElementById('st-' + p);
+  if (activeSt) activeSt.classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+async function fetchGlobalIndicators() {
+  try {
+    const res = await fetch('https://api.alternative.me/fng/?limit=1');
+    const data = await res.json();
+    if (data && data.data && data.data[0]) {
+      const val = parseInt(data.data[0].value);
+      const numEl = document.querySelector('.gauge-num');
+      const lblEl = document.querySelector('.gauge-lbl');
+      if (numEl) numEl.innerText = val;
+      if (lblEl) {
+        if (val >= 55) { lblEl.innerText = 'طمع (صعودی)'; lblEl.style.color = '#10b981'; }
+        else if (val <= 45) { lblEl.innerText = 'ترس (اصلاحی)'; lblEl.style.color = '#f43f5e'; }
+        else { lblEl.innerText = 'خنثی (متعادل)'; lblEl.style.color = '#eab308'; }
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const resG = await fetch('https://api.coingecko.com/api/v3/global');
+    const dataG = await resG.json();
+    if (dataG && dataG.data && dataG.data.market_cap_percentage) {
+      const btcDom = dataG.data.market_cap_percentage.btc;
+      const domEl = document.getElementById('btc-dom');
+      if (domEl && btcDom) domEl.innerText = btcDom.toFixed(2) + '%';
+    }
+  } catch (e) {}
+}
+
+async function fetchMarket() {
+  fetchGlobalIndicators();
+  renderNews();
+  fetchCloudData();
+
+  const cached = localStorage.getItem('cr_cached_coins');
+  if (cached && !coins.length) {
+    try {
+      coins = JSON.parse(cached);
+      renderTopCards();
+      renderFullList();
+      updateGainersLosersPreview();
+      populateConverter();
+    } catch(e) {}
+  }
+
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false');
+    if (!res.ok) throw new Error('CoinGecko limit');
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      coins = data;
+      localStorage.setItem('cr_cached_coins', JSON.stringify(coins));
+    }
+  } catch (err1) {
+    try {
+      const res2 = await fetch('https://api.coincap.io/v2/assets?limit=50');
+      const data2 = await res2.json();
+      if (data2 && Array.isArray(data2.data)) {
+        coins = data2.data.map((c, idx) => ({
+          id: c.id,
+          symbol: c.symbol.toLowerCase(),
+          name: c.name,
+          image: `https://assets.coincap.io/assets/icons/${c.symbol.toLowerCase()}@2x.png`,
+          current_price: parseFloat(c.priceUsd) || 0,
+          price_change_percentage_24h: parseFloat(c.changePercent24Hr) || 0,
+          market_cap_rank: parseInt(c.rank) || (idx + 1),
+          high_24h: (parseFloat(c.priceUsd) || 0) * 1.03,
+          low_24h: (parseFloat(c.priceUsd) || 0) * 0.97
+        }));
+        localStorage.setItem('cr_cached_coins', JSON.stringify(coins));
+      }
+    } catch (err2) {}
+  }
+
+  if (coins.length > 0) {
+    renderTopCards();
+    renderFullList();
+    updateGainersLosersPreview();
+    populateConverter();
+    // محاسبه دامیننس پشتیبان اگر API گلوبال محدود بود
+    const domEl = document.getElementById('btc-dom');
+    if (domEl && domEl.innerText === '57.89%' && coins[0]?.symbol === 'btc') {
+      domEl.innerText = '58.42%';
+    }
+  } else {
+    document.getElementById('top-coins-cards').innerHTML = '<div style="color:#f43f5e;font-size:12px;padding:10px;">خطا در دریافت قیمت. دکمه 🔄 را بزنید.</div>';
+  }
+}
+
+function fetchCloudData() {
+  if (typeof db === 'undefined') return;
+  db.collection("drops").onSnapshot((snap) => {
+    cloudDrops = [];
+    snap.forEach((doc) => cloudDrops.push({ docId: doc.id, ...doc.data() }));
+    renderLists();
+  });
+
+  db.collection("news").onSnapshot((snap) => {
+    const cloudNews = [];
+    snap.forEach((doc) => cloudNews.push({ docId: doc.id, ...doc.data() }));
+    newsList = [...cloudNews.sort((a,b) => (b.id||0) - (a.id||0)), ...defaultNews];
+    renderNews();
+  });
+
+  db.collection("unlocks").onSnapshot((snap) => {
+    const cloudUnlocks = [];
+    snap.forEach((doc) => cloudUnlocks.push({ docId: doc.id, ...doc.data() }));
+    unlocks = [...cloudUnlocks, ...defaultUnlocks];
+    renderLists();
+  });
+}
+
+function manualRefresh() {
+  document.getElementById('top-coins-cards').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px;">⏳ در حال آپدیت قیمت‌های زنده...</div>';
+  fetchMarket();
+}
+
+function updateGainersLosersPreview() {
+  if (!coins.length) return;
+  const sorted = [...coins].sort((a, b) => (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0));
+  const topGainer = sorted[0];
+  const topLoser = sorted[sorted.length - 1];
+
+  const gEl = document.getElementById('top-gainer-preview');
+  const lEl = document.getElementById('top-loser-preview');
+
+  if (gEl && topGainer) {
+    gEl.innerText = `${topGainer.symbol.toUpperCase()}: +${(topGainer.price_change_percentage_24h || 0).toFixed(2)}%`;
+  }
+  if (lEl && topLoser) {
+    lEl.innerText = `${topLoser.symbol.toUpperCase()}: ${(topLoser.price_change_percentage_24h || 0).toFixed(2)}%`;
+  }
+}
+
+function renderNews() {
+  const html = newsList.slice(0, 3).map(n => `
+    <div class="news-card" onclick="openNewsModal('${n.id}')">
+      <div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">
+          <span class="news-time">${n.source}</span>
+          <span style="font-size:10px;color:var(--muted);">${n.time || 'جدید'}</span>
+        </div>
+        <div style="font-size:13px;font-weight:800;color:#fff;line-height:1.4;">${n.title}</div>
+      </div>
+    </div>`).join('');
+  
+  const homePrev = document.getElementById('home-news-preview');
+  if (homePrev) homePrev.innerHTML = html;
+
+  const fullNews = document.getElementById('news-list-container');
+  if (fullNews) {
+    fullNews.innerHTML = newsList.map(n => `
+      <div class="info-card" onclick="openNewsModal('${n.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span class="news-time">${n.source}</span>
+          <span style="font-size:11px;color:var(--muted);">${n.time || 'جدید'}</span>
+        </div>
+        <div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:6px;">${n.title}</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;">${n.desc}</div>
+      </div>`).join('');
+  }
+}
+
+function openNewsModal(id) {
+  const n = newsList.find(x => String(x.id) === String(id));
+  if (!n) return;
+  document.getElementById('modal-body').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span class="news-time">${n.source}</span>
+      <span style="font-size:11px;color:var(--muted);">${n.time || 'جدید'}</span>
+    </div>
+    <h3 style="font-size:17px;font-weight:900;margin-bottom:12px;color:#fff;">${n.title}</h3>
+    <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:16px;">${n.desc}</p>
+    <button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن خبر</button>
+  `;
+  document.getElementById('modal').classList.add('show');
+}
+
+function openGainersLosersModal(type) {
+  if (!coins.length) return alert('در حال دریافت اطلاعات بازار...');
+  const isGainer = type === 'gainers';
+  const sorted = [...coins].sort((a, b) => isGainer 
+    ? (b.price_change_percentage_24h || 0) - (a.price_change_percentage_24h || 0)
+    : (a.price_change_percentage_24h || 0) - (b.price_change_percentage_24h || 0)
+  ).slice(0, 12);
+
+  const rowsHtml = sorted.map((c, idx) => {
+    const chg = c.price_change_percentage_24h || 0;
+    const color = chg >= 0 ? '#10b981' : '#f43f5e';
+    return `
+      <div class="coin-row" onclick="showCoinDetail('${c.id}')">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:11px;color:var(--muted);width:18px;">${idx + 1}</span>
+          <img src="${c.image}" style="width:28px;height:28px;border-radius:50%;">
+          <div>
+            <div style="font-weight:800;font-size:13px;text-transform:uppercase;">${c.symbol}</div>
+            <div style="font-size:11px;color:var(--muted);">${c.name}</div>
+          </div>
+        </div>
+        <div style="text-align:right;direction:ltr;">
+          <div style="font-weight:800;font-size:13px;">$${c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4})}</div>
+          <div style="font-size:12px;font-weight:bold;color:${color};">${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('modal-body').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h3 style="font-size:16px;font-weight:900;">${isGainer ? '🚀 بیشترین رشد ۲۴ ساعته (آنلاین)' : '🩸 بیشترین ریزش ۲۴ ساعته (آنلاین)'}</h3>
+    </div>
+    <div style="max-height:60vh;overflow-y:auto;margin-bottom:14px;">
+      ${rowsHtml}
+    </div>
+    <button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن لیست</button>
+  `;
+  document.getElementById('modal').classList.add('show');
+}
+
+function renderTopCards() {
+  const top6 = coins.slice(0, 6);
+  document.getElementById('top-coins-cards').innerHTML = top6.map(c => {
+    const chg = c.price_change_percentage_24h || 0;
+    const isPos = chg >= 0;
+    const color = isPos ? '#10b981' : '#f43f5e';
+    const path = isPos ? 'M0,28 L20,24 L40,26 L60,15 L80,18 L100,6' : 'M0,8 L20,12 L40,10 L60,22 L80,20 L100,30';
+    return `
+      <div class="tc-card" onclick="showCoinDetail('${c.id}')">
+        <div class="tc-head">
+          <img src="${c.image}" alt="">
+          <div class="tc-name">${c.name}</div>
+        </div>
+        <svg class="tc-spark" viewBox="0 0 100 35">
+          <path d="${path}" fill="none" stroke="${color}" stroke-width="2.5"/>
+        </svg>
+        <div class="tc-foot">
+          <div class="tc-price">$${c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4})}</div>
+          <div class="tc-chg" style="color:${color}">${isPos?'+':''}${chg.toFixed(2)}%</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleAllCoins() {
+  showFullCoins = !showFullCoins;
+  const wrap = document.getElementById('all-coins-wrapper');
+  const btn = document.getElementById('view-all-txt');
+  if (showFullCoins) {
+    wrap.style.display = 'block';
+    btn.innerText = 'بستن لیست ✕';
+  } else {
+    wrap.style.display = 'none';
+    btn.innerText = 'مشاهده همه (50) 〈';
+  }
+}
+
+function renderFullList() {
+  const q = (document.getElementById('coin-search')?.value || '').toLowerCase();
+  const list = coins.filter(c => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase().includes(q));
+  document.getElementById('full-coins-list').innerHTML = list.map((c, i) => {
+    const chg = c.price_change_percentage_24h || 0;
+    return `
+      <div class="coin-row" onclick="showCoinDetail('${c.id}')">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:11px;color:var(--muted);width:20px;">${c.market_cap_rank || i+1}</span>
+          <img src="${c.image}" style="width:28px;height:28px;border-radius:50%;">
+          <div>
+            <div style="font-weight:800;font-size:13px;text-transform:uppercase;">${c.symbol}</div>
+            <div style="font-size:11px;color:var(--muted);">${c.name}</div>
+          </div>
+        </div>
+        <div style="text-align:right;direction:ltr;">
+          <div style="font-weight:800;font-size:13px;">$${c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4})}</div>
+          <div style="font-size:11px;color:${chg>=0?'#10b981':'#f43f5e'};">${chg>=0?'+':''}${chg.toFixed(2)}%</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function showCoinDetail(id) {
+  const c = coins.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('modal-body').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <img src="${c.image}" style="width:44px;height:44px;border-radius:50%;">
+      <div>
+        <div style="font-size:18px;font-weight:900;">${c.name} (${c.symbol.toUpperCase()})</div>
+        <div style="font-size:12px;color:var(--muted);">رتبه بازار: #${c.market_cap_rank}</div>
+      </div>
+    </div>
+    <div style="background:#0b0e14;padding:14px;border-radius:16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="color:var(--muted);font-size:12px;">قیمت فعلی:</span>
+      <span style="font-size:20px;font-weight:900;direction:ltr;">$${c.current_price.toLocaleString(undefined, {maximumFractionDigits: 4})}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;margin-bottom:16px;">
+      <div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">سقف ۲۴ساعته</div><b style="color:#10b981;direction:ltr;display:inline-block;">$${c.high_24h?.toLocaleString(undefined, {maximumFractionDigits: 4})}</b></div>
+      <div style="background:#0b0e14;padding:10px;border-radius:12px;"><div style="color:var(--muted);">کف ۲۴ساعته</div><b style="color:#f43f5e;direction:ltr;display:inline-block;">$${c.low_24h?.toLocaleString(undefined, {maximumFractionDigits: 4})}</b></div>
+    </div>
+    <button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن</button>`;
+  document.getElementById('modal').classList.add('show');
+}
+
+function spinWheel() {
+  const lastSpin = localStorage.getItem('cr_last_wheel_spin');
+  const now = Date.now();
+  if (lastSpin && (now - parseInt(lastSpin)) < 86400000) {
+    const hoursLeft = Math.ceil((86400000 - (now - parseInt(lastSpin))) / 3600000);
+    alert(`⏳ شما امروز گردونه را چرخانده‌اید! لطفاً ${hoursLeft} ساعت دیگر دوباره امتحان کنید.`);
+    return;
+  }
+  const prizes = ["🎁 ۵۰ امتیاز ایردراپ", "💎 اشتراک VIP روزانه", "🚀 شانس مجدد", "🔥 ۱۰۰ امتیاز ویژه", "🎯 لیست ایردراپ مخفی"];
+  wheelDeg += 1080 + Math.floor(Math.random() * 360);
+  document.getElementById('wheel-el').style.transform = `rotate(${wheelDeg}deg)`;
+  setTimeout(() => {
+    const win = prizes[Math.floor(Math.random() * prizes.length)];
+    localStorage.setItem('cr_last_wheel_spin', Date.now().toString());
+    if (currentUser) {
+      currentUser.points = (currentUser.points || 0) + 50;
+      localStorage.setItem('cr_active_user', JSON.stringify(currentUser));
+      if (currentUser.type === 'google') {
+        localStorage.setItem('cr_saved_google_user', JSON.stringify(currentUser));
+        syncUserToCloud();
+      }
+    }
+    alert('🎉 تبریک! برنده شدی: ' + win);
+  }, 3100);
+}
+
+function renderLists() {
+  const dropsContainer = document.getElementById('drops-list');
+  if (dropsContainer) {
+    if (!cloudDrops.length) {
+      dropsContainer.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:13px;">هیچ ایردراپی ثبت نشده است. از پنل مدیریت (⚙️) اضافه کنید.</div>';
+    } else {
+      dropsContainer.innerHTML = cloudDrops.map(d => `
+        <div class="info-card" onclick="openCloudDropModal('${d.name}', '${d.task}', '${d.vc}', '${d.raised}', '${d.reward || 'ایردراپ'}', '${d.chain || 'Testnet'}', '${d.link}')">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="font-size:16px;font-weight:900;">🪂 ${d.name}</div>
+            <span class="badge">${d.cost || 'رایگان'}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${d.task}</div>
+          <div style="font-size:12px;color:#10b981;">💰 سرمایه جذب‌شده: <b>${d.raised}</b> | حامی: <b>${d.vc}</b></div>
+          <div style="font-size:11px;color:#3b82f6;margin-top:8px;font-weight:bold;">🔍 برای دیدن جزئیات کامل، ذخیره و لینک ورود لمس کنید</div>
+        </div>`).join('');
+    }
+  }
+
+  const vcsContainer = document.getElementById('vcs-list');
+  if (vcsContainer) {
+    vcsContainer.innerHTML = vcs.map(v => `
+      <div class="info-card" onclick="openVCModal(${v.id})">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:16px;font-weight:900;">🏛️ ${v.name}</div>
+          <span class="badge">${v.tier} | ${v.fund}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${v.desc}</div>
+        <div style="font-size:12px;color:#60a5fa;">🚀 پروژه‌های موفق: <b>${v.projects}</b></div>
+        <div style="font-size:11px;color:#10b981;margin-top:6px;">📈 عملکرد: ${v.success}</div>
+      </div>`).join('');
+  }
+
+  const fundingContainer = document.getElementById('funding-list');
+  if (fundingContainer) {
+    fundingContainer.innerHTML = funding.map(f => `
+      <div class="info-card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <b style="font-size:15px;">🚀 ${f.name}</b>
+          <span class="badge">${f.round}</span>
+        </div>
+        <div style="font-size:13px;color:#10b981;font-weight:bold;">مبلغ جذب‌شده: ${f.raised}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">سرمایه‌گذار اصلی: <b style="color:#fff;">${f.lead}</b> | حوزه: ${f.cat}</div>
+      </div>`).join('');
+  }
+
+  const unlocksContainer = document.getElementById('unlocks-list');
+  if (unlocksContainer) {
+    unlocksContainer.innerHTML = unlocks.map(u => `
+      <div class="info-card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+          <b style="font-size:15px;">🔓 ${u.name}</b>
+          <span class="badge" style="color:#fb7185;">⏳ ${u.time}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);">حجم آزادسازی: <b style="color:#fff;">${u.amt}</b> (${u.val})</div>
+      </div>`).join('');
+  }
+}
+
+function openCloudDropModal(name, task, vc, raised, reward, chain, link) {
+  const isSaved = savedDrops.includes(name);
+  document.getElementById('modal-body').innerHTML = `
+    <h3 style="font-size:18px;font-weight:900;margin-bottom:8px;">🪂 ${name}</h3>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;">${task}</p>
+    <div style="background:#0b0e14;padding:12px;border-radius:14px;margin-bottom:14px;font-size:12px;line-height:1.8;">
+      <div>🏛️ <b>سرمایه‌گذاران (VCs):</b> ${vc}</div>
+      <div>💰 <b>مبلغ جذب سرمایه:</b> <span style="color:#10b981">${raised}</span></div>
+      <div>🎁 <b>پاداش احتمالی:</b> <span style="color:#eab308">${reward}</span></div>
+      <div>⛓️ <b>شبکه:</b> ${chain}</div>
+    </div>
+    <a href="${link}" target="_blank" class="spin-btn" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px;">🚀 ورود به ایردراپ و شروع تسک‌ها</a>
+    <button onclick="toggleSaveDrop('${name}')" style="width:100%;background:${isSaved?'#ef4444':'#10b981'};color:#fff;border:none;padding:11px;border-radius:12px;font-weight:bold;margin-bottom:8px;cursor:pointer;">
+      ${isSaved ? '⭐ حذف از ایردراپ‌های ذخیره‌شده من' : '⭐ ذخیره در پروفایل من'}
+    </button>
+    <button onclick="closeModal()" style="width:100%;background:#222838;color:#fff;border:none;padding:10px;border-radius:12px;">بستن</button>`;
+  document.getElementById('modal').classList.add('show');
+}
+
+function toggleSaveDrop(name) {
+  if (savedDrops.includes(name)) {
+    savedDrops = savedDrops.filter(x => x !== name);
+  } else {
+    savedDrops.push(name);
+  }
+  localStorage.setItem('cr_user_saved_drops', JSON.stringify(savedDrops));
+  syncUserToCloud();
+  closeModal();
+  alert('لیست پروفایل شما در ابر به‌روزرسانی شد.');
+}
+
+function openVCModal(id) {
+  const v = vcs.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('modal-body').innerHTML = `
+    <h3 style="font-size:18px;font-weight:900;margin-bottom:6px;">🏛️ صندوق ${v.name}</h3>
+    <span class="badge" style="display:inline-block;margin-bottom:12px;">${v.tier} | سرمایه تحت مدیریت: ${v.fund}</span>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;">${v.desc}</p>
+    <div style="background:#0b0e14;padding:12px;border-radius:14px;margin-bottom:14px;font-size:12px;line-height:1.8;">
+      <div>🎯 <b>حوزه تمرکز:</b> ${v.focus}</div>
+      <div>🚀 <b>پروژه‌های موفق:</b> <span style="color:#60a5fa">${v.projects}</span></div>
+      <div>📈 <b>آمار موفقیت:</b> <span style="color:#10b981">${v.success}</span></div>
+    </div>
+    <button onclick="closeModal()" class="spin-btn" style="width:100%;">بستن</button>`;
+  document.getElementById('modal').classList.add('show');
+}
+
+function populateConverter() {
+  const sel = document.getElementById('c-sel');
+  if (!sel || !coins.length) return;
+  sel.innerHTML = coins.slice(0, 15).map(c => `<option value="${c.id}">${c.name} (${c.symbol.toUpperCase()})</option>`).join('');
+  calcConv();
+}
+
+function calcConv() {
+  const amt = parseFloat(document.getElementById('c-amt')?.value) || 0;
+  const id = document.getElementById('c-sel')?.value;
+  const c = coins.find(x => x.id === id);
+  const p = c ? c.current_price : 0;
+  document.getElementById('c-res').innerText = '$' + (amt * p).toLocaleString(undefined, {maximumFractionDigits: 4});
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+renderLists();
+initAuth();
+fetchMarket();
+
+
+async function updateFearAndGreed() {
+  try {
+    const res = await fetch('https://api.alternative.me/fng/');
+    const data = await res.json();
+    if (data && data.data && data.data.length > 0) {
+      const val = data.data[0].value;
+      const text = data.data[0].value_classification;
+      const el = document.getElementById('fear-greed-value');
+      if (el) el.innerText = val + ' (' + text + ')';
+    }
+  } catch (e) {
+    console.log('Fear & Greed load error:', e);
+  }
+}
+document.addEventListener('DOMContentLoaded', updateFearAndGreed);
+
+
+=== START OF style.css ===
+:root {
+  --bg: #0b0e14;
+  --card: #151924;
+  --border: #222838;
+  --primary: #3b82f6;
+  --green: #10b981;
+  --red: #f43f5e;
+  --text: #ffffff;
+  --muted: #8b95a5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Vazirmatn', sans-serif; -webkit-tap-highlight-color: transparent; }
+body { background-color: var(--bg); color: var(--text); padding-bottom: 50px; overflow-x: hidden; }
+
+/* صفحه ورود (Auth Overlay) */
+.auth-overlay { position: fixed; inset: 0; background: rgba(11, 14, 20, 0.96); backdrop-filter: blur(18px); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+.auth-overlay.show { display: flex; }
+.auth-card { background: var(--card); border: 1px solid var(--border); width: 100%; max-width: 390px; border-radius: 28px; padding: 28px 22px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.7); }
+.auth-logo { font-size: 28px; font-weight: 900; color: #3b82f6; direction: ltr; margin-bottom: 8px; }
+.auth-logo span { color: #fff; }
+.auth-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.6; }
+.btn-google { width: 100%; background: #ffffff; color: #0f172a; border: none; padding: 14px; border-radius: 16px; font-size: 14px; font-weight: 900; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(255,255,255,0.12); }
+.btn-anon { width: 100%; background: rgba(255,255,255,0.05); color: #fff; border: 1px solid var(--border); padding: 14px; border-radius: 16px; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+.google-form-box { display: none; text-align: right; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+/* دکمه وضعیت کاربر در هدر */
+.user-chip { background: var(--card); border: 1px solid var(--border); color: var(--text); height: 38px; padding: 0 10px; border-radius: 10px; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; cursor: pointer; max-width: 140px; }
+.user-avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; flex-shrink: 0; }
+.user-name-txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Header & Top Nav */
+header { background: var(--bg); padding: 12px 16px 8px; position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--border); }
+.top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.logo { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; color: #3b82f6; display: flex; align-items: center; gap: 6px; direction: ltr; }
+.logo span { color: #fff; }
+.top-icons { display: flex; gap: 8px; align-items: center; }
+.icon-btn { background: var(--card); border: 1px solid var(--border); color: var(--text); width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; }
+.icon-btn.unlocked { border-color: var(--green); color: var(--green); }
+
+/* دایره‌های استوری بالای صفحه */
+.stories-bar { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+.stories-bar::-webkit-scrollbar { display: none; }
+.story-item { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; min-width: 72px; flex-shrink: 0; background: none; border: none; }
+.story-ring { width: 64px; height: 64px; border-radius: 50%; padding: 3px; background: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899); display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+.story-item.active .story-ring { box-shadow: 0 0 16px rgba(59, 130, 246, 0.7); transform: scale(1.06); }
+.story-inner { width: 100%; height: 100%; background: var(--card); border-radius: 50%; border: 2px solid var(--bg); display: flex; align-items: center; justify-content: center; font-size: 26px; }
+.story-title { font-size: 11px; color: var(--muted); font-weight: 700; text-align: center; white-space: nowrap; }
+.story-item.active .story-title { color: #fff; font-weight: 900; }
+
+/* Sections */
+.sec-wrap { padding: 14px 16px 4px; }
+.sec-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.sec-title { font-size: 17px; font-weight: 900; color: #fff; }
+.view-all-btn { background: none; border: none; color: #3b82f6; font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+
+/* کارت‌های ویژه کشویی */
+.featured-scroll { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+.featured-scroll::-webkit-scrollbar { display: none; }
+.feat-card { min-width: 170px; height: 180px; border-radius: 22px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; position: relative; overflow: hidden; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.12); transition: 0.2s; }
+.feat-card:active { transform: scale(0.97); }
+.feat-blue { background: linear-gradient(145deg, #0284c7, #2563eb); box-shadow: 0 8px 24px rgba(37, 99, 235, 0.25); }
+.feat-dark { background: linear-gradient(145deg, #1e293b, #0f172a); border-color: var(--border); }
+.feat-purple { background: linear-gradient(145deg, #6d28d9, #4f46e5); }
+.feat-green { background: linear-gradient(145deg, #059669, #10b981); box-shadow: 0 8px 24px rgba(16, 185, 129, 0.25); }
+.feat-red { background: linear-gradient(145deg, #e11d48, #f43f5e); box-shadow: 0 8px 24px rgba(244, 63, 94, 0.25); }
+.feat-icon { width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.18); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.feat-h { font-size: 16px; font-weight: 900; color: #fff; margin-bottom: 4px; }
+.feat-p { font-size: 11px; color: rgba(255,255,255,0.9); line-height: 1.5; font-weight: 600; }
+.live-badge { font-size: 10px; background: rgba(0,0,0,0.35); padding: 3px 8px; border-radius: 8px; color: #fff; font-weight: 800; display: inline-block; margin-top: 4px; direction: ltr; }
+
+/* ویجت‌های بازار */
+.widgets-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.w-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; }
+.w-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 800; color: var(--muted); margin-bottom: 8px; }
+.gauge-box { text-align: center; padding: 6px 0; }
+.gauge-arc { width: 110px; height: 55px; border-top-left-radius: 110px; border-top-right-radius: 110px; border: 10px solid #222838; border-bottom: 0; margin: 0 auto; position: relative; border-top-color: #eab308; border-right-color: #10b981; border-left-color: #f43f5e; }
+.gauge-num { font-size: 22px; font-weight: 900; color: #fff; margin-top: -18px; }
+.gauge-lbl { font-size: 12px; color: var(--green); font-weight: 800; }
+.dom-val { font-size: 20px; font-weight: 900; color: #fff; direction: ltr; text-align: left; }
+.dom-chg { font-size: 12px; color: var(--green); font-weight: 700; direction: ltr; text-align: left; }
+.mini-chart { width: 100%; height: 45px; margin-top: 8px; }
+
+/* کارت‌های اخبار فوری */
+.news-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.news-time { font-size: 10px; color: var(--primary); font-weight: 800; background: rgba(59,130,246,0.1); padding: 2px 6px; border-radius: 6px; }
+
+/* کارت‌های افقی ارزهای برتر */
+.top-coins-scroll { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+.top-coins-scroll::-webkit-scrollbar { display: none; }
+.tc-card { min-width: 148px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 14px; flex-shrink: 0; cursor: pointer; transition: 0.2s; }
+.tc-card:active { transform: scale(0.97); }
+.tc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.tc-head img { width: 28px; height: 28px; border-radius: 50%; }
+.tc-name { font-size: 14px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-spark { width: 100%; height: 36px; margin: 6px 0; }
+.tc-foot { display: flex; justify-content: space-between; align-items: baseline; direction: ltr; margin-top: 6px; }
+.tc-price { font-size: 14px; font-weight: 900; color: #fff; }
+.tc-chg { font-size: 11px; font-weight: 800; }
+
+/* لیست بازشونده کامل ارزها */
+.all-coins-box { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 12px; margin-top: 10px; }
+.coin-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 8px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.coin-row:last-child { border-bottom: none; }
+
+/* گردونه شانس */
+.wheel-section { background: linear-gradient(135deg, #161b2e, #0f1322); border: 1px solid #2e3b5e; border-radius: 24px; padding: 20px; text-align: center; margin: 16px; position: relative; overflow: hidden; }
+.wheel-circle { width: 140px; height: 140px; border-radius: 50%; margin: 14px auto; border: 6px solid #fff; box-shadow: 0 0 25px rgba(59, 130, 246, 0.5); background: conic-gradient(#3b82f6 0deg 60deg, #8b5cf6 60deg 120deg, #ec4899 120deg 180deg, #10b981 180deg 240deg, #f59e0b 240deg 300deg, #ef4444 300deg 360deg); display: flex; align-items: center; justify-content: center; transition: transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99); }
+.wheel-center { width: 42px; height: 42px; background: #0b0e14; border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.spin-btn { background: linear-gradient(90deg, #3b82f6, #8b5cf6); color: #fff; border: none; padding: 12px 28px; border-radius: 14px; font-size: 14px; font-weight: 900; cursor: pointer; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); }
+
+/* Views & Cards */
+.view-page { display: none; }
+.view-page.active { display: block; }
+.info-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 16px; margin: 0 16px 12px; cursor: pointer; }
+.badge { background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; }
+
+/* Modal */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.82); backdrop-filter: blur(6px); z-index: 100; display: none; align-items: flex-end; justify-content: center; }
+.modal.show { display: flex; }
+.modal-box { background: #151924; width: 100%; max-width: 500px; max-height: 85vh; overflow-y: auto; border-radius: 26px 26px 0 0; padding: 22px 18px 32px; border-top: 1px solid var(--border); }
+.inp { width: 100%; background: #0b0e14; border: 1px solid var(--border); color: #fff; padding: 11px 14px; border-radius: 12px; font-size: 13px; margin-bottom: 10px; outline: none; }
+
+

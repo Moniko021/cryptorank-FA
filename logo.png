@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Crypto4YouFa app icon</title>
+  <defs><linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1463FF"/><stop offset="1" stop-color="#00D4F5"/></linearGradient></defs>
+  <rect width="256" height="256" rx="52" fill="#071329"/>
+  <g transform="translate(10 15) scale(1.02)">
+    <path d="M118 14 186 53 186 75 150 96 150 78 118 60 55 96 55 168 88 187 118 170 150 189 118 208 19 151 19 84Z" fill="url(#blue)" stroke="url(#blue)" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M120 88H141V118H165V139H141V171H120V139H84V122Z" fill="url(#blue)"/>
+    <path d="M29 174 168 67" fill="none" stroke="#00D4F5" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="23" cy="179" r="12" fill="#00D4F5"/><circle cx="175" cy="62" r="12" fill="#00D4F5"/>
+  </g>
+</svg>

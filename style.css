@@ -185,3 +185,34 @@ header {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
+
+/* ==========================================
+   BRAND BACKGROUND & ANIMATIONS
+   ========================================== */
+body {
+  position: relative;
+  background-color: #080a10; /* رنگ تیره پایه */
+}
+
+/* لایه پس‌زمینه با استفاده از لوگو */
+body::before {
+  content: "";
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120vw; height: 120vh; /* بزرگتر از صفحه برای پوشش کامل */
+  background-image: url('logo.png');
+  background-size: contain; /* یا cover */
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.04; /* شفافیت خیلی کم (۴ درصد) تا با متن تداخل نکند */
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(2px); /* کمی محو برای زیبایی بیشتر */
+}
+
+/* انیمیشن برای لوگوی صفحه اول (Splash) */
+@keyframes pulseLogo {
+  0% { transform: scale(0.95) translateY(0); filter: drop-shadow(0 0 10px rgba(59,130,246,0.5)); }
+  100% { transform: scale(1.05) translateY(-8px); filter: drop-shadow(0 0 25px rgba(59,130,246,0.8)); }
+}

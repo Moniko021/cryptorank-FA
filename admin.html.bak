@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>پنل مدیریت ابری | crypto4youFA</title>
+  <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+  <link rel="stylesheet" href="style.css?v=2100">
+  <style>
+    .admin-container { max-width:680px; margin:24px auto; padding:20px; background:var(--card); border:1px solid var(--border); border-radius:24px; }
+    .admin-title { font-size:19px; font-weight:900; color:#60a5fa; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; }
+    .admin-tabs { display:flex; gap:8px; margin-bottom:16px; }
+    .tab-btn { flex:1; background:#0b0e14; color:var(--muted); border:1px solid var(--border); padding:10px; border-radius:12px; font-size:12px; font-weight:800; cursor:pointer; text-align:center; }
+    .tab-btn.active { background:#3b82f6; color:#fff; border-color:#3b82f6; }
+    .admin-sec { display:none; }
+    .admin-sec.active { display:block; }
+    .item-row { background:#0b0e14; padding:12px; border-radius:14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .del-btn { background:#f43f5e; color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer; flex-shrink:0; }
+    .edit-btn { background:#eab308; color:#000; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer; flex-shrink:0; }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=2100"></script>
+</head>
+<body>
+
+  <div class="admin-container">
+    <div class="admin-title">
+      <span>👑 پنل مدیریت crypto4youFA</span>
+      <a href="index.html" style="font-size:12px; color:var(--muted); text-decoration:none; background:rgba(255,255,255,0.05); padding:6px 12px; border-radius:8px;">← بازگشت به سایت</a>
+    </div>
+
+    <div id="login-box">
+      <div style="font-size:13px; color:var(--muted); margin-bottom:12px;">لطفاً رمز عبور امنیتی مدیریت را وارد کنید:</div>
+      <input id="admin-pass" class="inp" type="password" placeholder="رمز عبور مدیریت..." style="direction:ltr; text-align:left;" onkeydown="if(event.key==='Enter')checkAdminLogin()">
+      <button onclick="checkAdminLogin()" class="spin-btn" style="width:100%;">ورود به پنل مدیریت</button>
+    </div>
+
+    <div id="panel-box" style="display:none;">
+      <div class="admin-tabs">
+        <button class="tab-btn active" id="tb-drops" onclick="switchTab('drops')">🪂 مدیریت ایردراپ‌ها</button>
+        <button class="tab-btn" id="tb-tasks" onclick="switchTab('tasks')">🎯 تسک‌های نقدی</button>
+      </div>
+
+      <div id="sec-drops" class="admin-sec active">
+        <div style="background:#0b0e14; padding:16px; border-radius:18px; margin-bottom:18px;">
+          <h3 id="drop-form-title" style="font-size:14px; font-weight:900; margin-bottom:12px; color:#10b981;">+ افزودن ایردراپ جدید</h3>
+          <input type="hidden" id="edit-drop-docid" value="">
+          <input id="n-name" class="inp" placeholder="نام پروژه (مثلاً Monad)">
+          <input id="n-task" class="inp" placeholder="توضیح کوتاه تسک‌ها">
+          <input id="n-vc" class="inp" placeholder="سرمایه‌گذاران (مثلاً Paradigm)">
+          <input id="n-raised" class="inp" placeholder="مبلغ سرمایه (مثلاً $225M)">
+          <input id="n-chain" class="inp" placeholder="شبکه (مثلاً Monad Testnet)">
+          <input id="n-reward" class="inp" placeholder="پاداش کمپین (مثلاً توکن $MON)">
+          <select id="n-cost" class="inp">
+            <option value="رایگان">🆓 کاملاً رایگان</option>
+            <option value="نیازمند سرمایه">💰 نیازمند سرمایه</option>
+          </select>
+          <select id="n-urgent" class="inp">
+            <option value="false">⏳ وضعیت عادی (فعال)</option>
+            <option value="true">🔥 نزدیک به پایان (فوری)</option>
+          </select>
+          <textarea id="n-steps" class="inp" rows="3" placeholder="مراحل گام‌به‌گام آموزش (هر مرحله در یک خط)..."></textarea>
+          <input id="n-link" class="inp" placeholder="لینک ورود مستقیم (https://...)" style="direction:ltr; text-align:left;">
+          <button id="save-drop-btn" onclick="saveNewDropCloud()" class="spin-btn" style="width:100%;">انتشار آنی ایردراپ</button>
+          <button id="cancel-edit-btn" onclick="resetDropForm()" style="display:none; width:100%; background:#334155; color:#fff; border:none; padding:10px; border-radius:12px; margin-top:8px; cursor:pointer;">انصراف از ویرایش</button>
+        </div>
+        <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست ایردراپ‌های فعال روی ابر:</div>
+        <div id="admin-drops-list"></div>
+      </div>
+
+      <div id="sec-tasks" class="admin-sec">
+        <div style="background:#0b0e14; padding:16px; border-radius:18px; margin-bottom:18px;">
+          <h3 style="font-size:14px; font-weight:900; margin-bottom:12px; color:#3b82f6;">+ تعریف تسک پاداش نقدی جدید</h3>
+          <input id="t-title" class="inp" placeholder="عنوان تسک (مثلاً عضویت در کانال تلگرام)">
+          <input id="t-reward" class="inp" type="number" placeholder="مبلغ پاداش به تومان (مثلاً 10000)">
+          <input id="t-link" class="inp" placeholder="لینک تسک (https://...)" style="direction:ltr; text-align:left;">
+          <button onclick="saveNewTaskCloud()" class="spin-btn" style="width:100%;">ثبت تسک جدید</button>
+        </div>
+        <div style="font-size:13px; font-weight:900; margin-bottom:10px;">لیست تسک‌های فعال:</div>
+        <div id="admin-tasks-list"></div>
+      </div>
+
+      <div class="card" style="border:1px solid #10b981; margin-top:24px; background:#131722; padding:16px; border-radius:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h3 style="margin:0; color:#10b981; font-size:15px;">👥 لیست کاربران، جوایز گردونه و کیف پول‌ها</h3>
+          <button onclick="loadAdminUsers()" style="background:#3b82f6; color:#fff; border:none; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer;">🔄 بروزرسانی</button>
+        </div>
+        <div style="font-size:11px; color:#94a3b8; margin-bottom:12px; line-height:1.6;">لیست کاربران جیمیل، موجودی جوایز و آدرس کیف پول سولانا/اتریوم برای واریزهای جمعه:</div>
+        <div id="users-admin-list" style="font-size:12px; color:#cbd5e1;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var adminDropsCache = {};
+    var adminUsersCache = {};
+
+    function escHtml(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function cleanUrl(u) {
+      var s = String(u || '').trim();
+      if (/^https?:\/\//i.test(s)) return s;
+      return 'https://';
+    }
+
+    async function sha256(str) {
+      var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+    }
+
+    async function checkAdminLogin() {
+      var pass = document.getElementById('admin-pass').value;
+      var hash = await sha256(pass);
+      if (hash === '0e07d2f2403f5246f6e7d4785966c5690f74a2232c19109356e28b92266b43f7') {
+        document.getElementById('login-box').style.display = 'none';
+        document.getElementById('panel-box').style.display = 'block';
+        loadAllAdminData();
+      } else {
+        alert('⛔ رمز عبور اشتباه است!');
+      }
+    }
+
+    function switchTab(tab) {
+      ['drops', 'tasks'].forEach(function(t) {
+        document.getElementById('tb-' + t).classList.remove('active');
+        document.getElementById('sec-' + t).classList.remove('active');
+      });
+      document.getElementById('tb-' + tab).classList.add('active');
+      document.getElementById('sec-' + tab).classList.add('active');
+    }
+
+    function loadAllAdminData() {
+      loadCloudDropsAdmin();
+      loadCloudTasksAdmin();
+      loadAdminUsers();
+    }
+
+    function loadCloudDropsAdmin() {
+      db.collection("drops").onSnapshot(function(snap) {
+        var container = document.getElementById('admin-drops-list');
+        adminDropsCache = {};
+        if (snap.empty) {
+          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ ایردراپی ثبت نشده است.</div>';
+          return;
+        }
+        var html = '';
+        snap.forEach(function(doc) {
+          var d = doc.data();
+          adminDropsCache[doc.id] = d;
+          html += '<div class="item-row">' +
+            '<div><div style="font-weight:900; font-size:14px;">🪂 ' + escHtml(d.name) + '</div><div style="font-size:11px; color:var(--muted);">' + escHtml(d.chain) + ' | ' + escHtml(d.cost) + '</div></div>' +
+            '<div style="display:flex;gap:6px;">' +
+              '<button data-id="' + escHtml(doc.id) + '" onclick="editDrop(this.dataset.id)" class="edit-btn">ویرایش</button>' +
+              '<button data-id="' + escHtml(doc.id) + '" onclick="deleteDoc(\'drops\', this.dataset.id)" class="del-btn">حذف</button>' +
+            '</div>' +
+          '</div>';
+        });
+        container.innerHTML = html;
+      });
+    }
+
+    function editDrop(docId) {
+      var d = adminDropsCache[docId];
+      if (!d) return;
+      document.getElementById('edit-drop-docid').value = docId;
+      document.getElementById('n-name').value = d.name || '';
+      document.getElementById('n-task').value = d.task || '';
+      document.getElementById('n-vc').value = d.vc || '';
+      document.getElementById('n-raised').value = d.raised || '';
+      document.getElementById('n-chain').value = d.chain || '';
+      document.getElementById('n-reward').value = d.reward || '';
+      document.getElementById('n-cost').value = d.cost || 'رایگان';
+      document.getElementById('n-urgent').value = d.urgent ? 'true' : 'false';
+      document.getElementById('n-steps').value = Array.isArray(d.steps) ? d.steps.join('\n') : '';
+      document.getElementById('n-link').value = d.link || '';
+      document.getElementById('drop-form-title').innerText = '✏️ ویرایش ایردراپ: ' + (d.name || '');
+      document.getElementById('save-drop-btn').innerText = '💾 ذخیره تغییرات ایردراپ';
+      document.getElementById('cancel-edit-btn').style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+
+    function resetDropForm() {
+      document.getElementById('edit-drop-docid').value = '';
+      ['n-name','n-task','n-vc','n-raised','n-chain','n-reward','n-steps','n-link'].forEach(function(id) { document.getElementById(id).value = ''; });
+      document.getElementById('drop-form-title').innerText = '+ افزودن ایردراپ جدید';
+      document.getElementById('save-drop-btn').innerText = 'انتشار آنی ایردراپ';
+      document.getElementById('cancel-edit-btn').style.display = 'none';
+    }
+
+    function saveNewDropCloud() {
+      var name = document.getElementById('n-name').value.trim();
+      if (!name) return alert('نام پروژه را وارد کنید.');
+      var rawSteps = document.getElementById('n-steps').value.trim();
+      var stepsArr = rawSteps ? rawSteps.split('\n').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+      var editId = document.getElementById('edit-drop-docid').value;
+
+      var payload = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        name: name,
+        task: document.getElementById('n-task').value.trim() || 'تسک‌های کمپین',
+        vc: document.getElementById('n-vc').value.trim() || 'نامشخص',
+        raised: document.getElementById('n-raised').value.trim() || 'نامشخص',
+        chain: document.getElementById('n-chain').value.trim() || 'Multi-Chain',
+        reward: document.getElementById('n-reward').value.trim() || 'توکن پروژه',
+        cost: document.getElementById('n-cost').value,
+        urgent: document.getElementById('n-urgent').value === 'true',
+        steps: stepsArr,
+        link: cleanUrl(document.getElementById('n-link').value),
+        updatedAt: new Date().toLocaleDateString('fa-IR')
+      };
+
+      var prom = editId ? db.collection("drops").doc(editId).set(payload, { merge: true }) : db.collection("drops").add(payload);
+      prom.then(function() {
+        alert(editId ? '✅ تغییرات ایردراپ ذخیره شد!' : '✅ ایردراپ جدید منتشر شد!');
+        resetDropForm();
+      });
+    }
+
+    function loadCloudTasksAdmin() {
+      db.collection("tasks").onSnapshot(function(snap) {
+        var container = document.getElementById('admin-tasks-list');
+        if (snap.empty) {
+          container.innerHTML = '<div style="color:var(--muted); font-size:12px;">هیچ تسکی ثبت نشده است.</div>';
+          return;
+        }
+        var html = '';
+        snap.forEach(function(doc) {
+          var t = doc.data();
+          html += '<div class="item-row"><div><div style="font-weight:900; font-size:13px;">🎯 ' + escHtml(t.title) + '</div><div style="font-size:11px; color:#10b981;">پاداش: ' + Number(t.reward || 0).toLocaleString('fa-IR') + ' تومان</div></div><button data-id="' + escHtml(doc.id) + '" onclick="deleteDoc(\'tasks\', this.dataset.id)" class="del-btn">حذف</button></div>';
+        });
+        container.innerHTML = html;
+      });
+    }
+
+    function saveNewTaskCloud() {
+      var title = document.getElementById('t-title').value.trim();
+      var reward = document.getElementById('t-reward').value.trim();
+      if (!title || !reward) return alert('عنوان و مبلغ پاداش را وارد کنید.');
+      db.collection("tasks").add({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        title: title,
+        reward: Number(reward),
+        link: cleanUrl(document.getElementById('t-link').value)
+      }).then(function() {
+        alert('✅ تسک جدید ثبت شد!');
+        ['t-title','t-reward','t-link'].forEach(function(id) { document.getElementById(id).value = ''; });
+      });
+    }
+
+    function deleteDoc(col, docId) {
+      if (!confirm('آیا از حذف این مورد مطمئن هستید؟')) return;
+      db.collection(col).doc(docId).delete();
+    }
+
+    function copyWalletByBtn(btn) {
+      var txt = btn.getAttribute('data-wallet') || '';
+      if (!txt) return alert('آدرسی ثبت نشده است!');
+      navigator.clipboard.writeText(txt).then(function() {
+        alert('✅ آدرس کیف پول کپی شد: ' + txt);
+      }).catch(function() {
+        prompt('آدرس کیف پول را کپی کنید:', txt);
+      });
+    }
+
+    function markUserPaidByBtn(btn) {
+      var docId = btn.getAttribute('data-docid');
+      var u = adminUsersCache[docId];
+      if (!u) return;
+      var bal = Number(u.balanceToman) || 0;
+      if (!confirm('آیا جایزه (' + bal.toLocaleString('fa-IR') + ' تومان) برای ' + (u.email || docId) + ' واریز شد و موجودی او صفر شود؟')) return;
+
+      var paidRecord = [{ title: '✅ تسویه حساب هفتگی انجام شد', amount: 0, date: new Date().toLocaleDateString('fa-IR') }];
+      db.collection("users").doc(docId).set({
+        balanceToman: 0,
+        prizesList: paidRecord,
+        paidResetAt: Date.now()
+      }, { merge: true }).then(function() {
+        alert('✅ موجودی کاربر با موفقیت صفر شد!');
+        loadAdminUsers();
+      });
+    }
+
+    function renderUsersHtml(list) {
+      var box = document.getElementById('users-admin-list');
+      if (!box) return;
+      if (!list || list.length === 0) {
+        box.innerHTML = '<div style="text-align:center; padding:14px; background:#0b0e14; border-radius:10px; color:#94a3b8;">هنوز هیچ کاربری با جیمیل ثبت‌نام نکرده است.</div>';
+        return;
+      }
+      list.sort(function(a, b) { return (Number(b.balanceToman) || 0) - (Number(a.balanceToman) || 0); });
+      adminUsersCache = {};
+
+      box.innerHTML = list.map(function(u) {
+        adminUsersCache[u.docId] = u;
+        var bal = Number(u.balanceToman) || 0;
+        var sol = String(u.solWallet || '');
+        var eth = String(u.ethWallet || '');
+        var prizes = Array.isArray(u.prizesList) ? u.prizesList : [];
+        var prizesTxt = prizes.length > 0
+          ? prizes.map(function(p) { return '<span style="display:inline-block; background:#1e293b; color:#10b981; padding:3px 8px; border-radius:6px; margin:2px; font-size:10px;">🎁 ' + escHtml(p.title) + ' (' + escHtml(p.date || '') + ')</span>'; }).join('')
+          : '<span style="color:#64748b; font-size:11px;">هنوز جایزه‌ای نبرده</span>';
+
+        return '<div style="background:#0b0e14; border:1px solid #1e2433; border-radius:12px; padding:12px; margin-bottom:10px;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #1e2433; padding-bottom:8px; margin-bottom:8px;">' +
+            '<div>' +
+              '<div style="font-weight:900; font-size:14px; color:#fff;">👤 ' + escHtml(u.name || 'کاربر') + '</div>' +
+              '<div style="font-size:11px; color:#60a5fa; direction:ltr; text-align:right;">' + escHtml(u.email || u.docId) + '</div>' +
+            '</div>' +
+            '<div style="text-align:left;">' +
+              '<div style="font-size:10px; color:#94a3b8;">موجودی جایزه:</div>' +
+              '<div style="font-size:15px; font-weight:900; color:' + (bal > 0 ? '#10b981' : '#64748b') + ';">' + bal.toLocaleString('fa-IR') + ' تومان</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-bottom:8px; line-height:1.8;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px; margin-bottom:4px;">' +
+              '<span style="font-size:11px; color:#a855f7;">🟣 سولانا: <b style="color:#fff; direction:ltr; display:inline-block;">' + (sol ? escHtml(sol.substring(0, 16) + '...') : 'ثبت نشده') + '</b></span>' +
+              (sol ? '<button data-wallet="' + escHtml(sol) + '" onclick="copyWalletByBtn(this)" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
+            '</div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; background:#131824; padding:6px 10px; border-radius:8px;">' +
+              '<span style="font-size:11px; color:#3b82f6;">🔵 اتریوم: <b style="color:#fff; direction:ltr; display:inline-block;">' + (eth ? escHtml(eth.substring(0, 16) + '...') : 'ثبت نشده') + '</b></span>' +
+              (eth ? '<button data-wallet="' + escHtml(eth) + '" onclick="copyWalletByBtn(this)" style="background:#3b82f6; color:#fff; border:none; padding:4px 8px; border-radius:6px; font-size:10px; cursor:pointer;">📋 کپی آدرس</button>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div style="margin-bottom:8px;"><span style="font-size:11px; color:#94a3b8;">🏆 جوایز: </span>' + prizesTxt + '</div>' +
+          (bal > 0 ? '<button data-docid="' + escHtml(u.docId) + '" onclick="markUserPaidByBtn(this)" style="width:100%; background:#10b981; color:#fff; border:none; padding:8px; border-radius:8px; font-weight:bold; font-size:11px; cursor:pointer;">✅ تسویه شد (صفر کردن موجودی)</button>' : '') +
+        '</div>';
+      }).join('');
+    }
+
+    function loadAdminUsers() {
+      var box = document.getElementById('users-admin-list');
+      if (!box) return;
+      box.innerHTML = '<div style="color:#eab308; padding:10px;">⏳ در حال دریافت لیست کاربران از سرور...</div>';
+
+      db.collection("users").get().then(function(snap) {
+        var list = [];
+        snap.forEach(function(doc) {
+          var cd = doc.data();
+          list.push({
+            docId: doc.id,
+            name: cd.name || 'کاربر',
+            email: cd.email || doc.id,
+            balanceToman: Number(cd.balanceToman) || 0,
+            solWallet: cd.solWallet || '',
+            ethWallet: cd.ethWallet || '',
+            prizesList: Array.isArray(cd.prizesList) ? cd.prizesList : []
+          });
+        });
+        renderUsersHtml(list);
+      }).catch(function() {
+        box.innerHTML = '<div style="color:#f43f5e; padding:10px;">خطا در ارتباط با سرور.</div>';
+      });
+    }
+  </script>
+</body>
+</html>
