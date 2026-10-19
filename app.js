@@ -27,6 +27,7 @@ function safeUrl(u) {
   return '#';
 }
 
+let urlRefCode = new URLSearchParams(window.location.search).get('ref');
 let currentUser = safeJsonParse('cr_active_user', null);
 let savedGoogleAccount = safeJsonParse('cr_saved_google_user', null);
 let savedDrops = safeJsonParse('cr_user_saved_drops', []);
@@ -271,6 +272,10 @@ function verifyAndLogin() {
   }
 
   currentUser = { type: 'google', name: crPendingUser.name, email: cleanEmail, balanceToman: bal, prizesList: pList, completedTasks: cTasks, solWallet: solW, ethWallet: ethW, lastSpin: lSpin };
+      if (urlRefCode && urlRefCode !== cleanEmail && bal === 0) {
+        currentUser.referredBy = urlRefCode.trim().toLowerCase();
+        currentUser.referralStatus = 'pending';
+      }
   if (!currentUser.userIP) { fetchUserIP().then(function(ip) { currentUser.userIP = ip; syncUserToCloud(); }); }
   savedGoogleAccount = Object.assign({}, currentUser);
   savedDrops = drops;
